@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 订单服务。主责：成员4。
+ * 订单服务。主责：成员2（业务服务层）。
  *
  * <p>核心流程（需求文档 4.1 下单流程时序）：
  * <pre>
@@ -79,7 +79,7 @@ public class OrderService {
     /**
      * 提交订单（购物车结算 + 模拟支付）。
      *
-     * <p>TODO(成员4)：把模拟支付落库到 {@code payment_record}，
+     * <p>TODO(成员2)：把模拟支付落库到 {@code payment_record}，
      * 余额支付需扣减 {@code student.balance} 并做余额充足校验。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -206,7 +206,7 @@ public class OrderService {
         }
         orderStateMachine.transit(order, OrderStatus.CANCELED, userId, RoleEnum.STUDENT.getCode(), reason);
         restoreStock(orderId);
-        // TODO(成员4)：模拟支付退款，把 pay_status 置为已退款并写 payment_record
+        // TODO(成员2)：模拟支付退款，把 pay_status 置为已退款并写 payment_record
         orderNotifyHandler.sendToUser(userId, "ORDER_STATUS", statusPayload(order));
     }
 
@@ -260,7 +260,7 @@ public class OrderService {
         // 拒单：回补库存并退款
         if (targetStatus == OrderStatus.CANCELED) {
             restoreStock(orderId);
-            // TODO(成员4)：模拟支付退款，把 pay_status 置为已退款
+            // TODO(成员2)：模拟支付退款，把 pay_status 置为已退款
         }
 
         notifyOrderStatus(order, before);
@@ -301,7 +301,7 @@ public class OrderService {
     }
 
     /**
-     * 数据看板：近 N 天订单量与销售额趋势（供成员3的管理端调用）。
+     * 数据看板：近 N 天订单量与销售额趋势（供业务服务层 · 成员2 的管理端看板调用）。
      *
      * @return 每项含 stat_date / order_count / sales_amount
      */

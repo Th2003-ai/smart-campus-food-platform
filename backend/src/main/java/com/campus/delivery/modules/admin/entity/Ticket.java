@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 客服工单表。主责：成员3（AI 客服无法回答时转人工）。
+ * 客服工单表。主责：成员4（数据存储层）。
  */
 @Data
 @TableName("ticket")

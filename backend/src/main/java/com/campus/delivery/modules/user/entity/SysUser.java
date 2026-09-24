@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 /**
  * 账号表（四种角色共用的登录底座）。
  *
- * <p>主责：成员4（认证） / 成员1（学生资料）。
+ * <p>主责：成员4（数据存储层）。
  */
 @Data
 @TableName("sys_user")

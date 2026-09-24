@@ -5,7 +5,7 @@ import com.campus.delivery.modules.order.entity.OrderItem;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 订单明细数据访问。主责：成员4。
+ * 订单明细数据访问。主责：成员4（数据存储层）。
  */
 @Mapper
 public interface OrderItemMapper extends BaseMapper<OrderItem> {

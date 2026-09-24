@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 订单明细表。主责：成员4。
+ * 订单明细表。主责：成员4（数据存储层）。
  *
  * <p>菜品名称、价格在下单时快照保存，保证菜品改名或调价后历史订单不受影响。
  */

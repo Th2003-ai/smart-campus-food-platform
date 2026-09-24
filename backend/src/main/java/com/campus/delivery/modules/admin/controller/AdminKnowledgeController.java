@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 知识库管理接口。主责：成员3（维护客服问答对）。
+ * 知识库管理接口。主责：成员2（业务服务层）。
  */
 @Tag(name = "15-管理端·知识库", description = "客服问答对的增删改查")
 @RestController
@@ -40,14 +40,14 @@ public class AdminKnowledgeController {
     @Operation(summary = "新增或修改知识")
     @PostMapping
     public Result<Void> save(@RequestBody KnowledgeBase knowledge) {
-        // TODO(成员3)：调用 KnowledgeBaseService 保存（含分类校验与关键词自动提取）
+        // TODO(成员2)：调用 KnowledgeBaseService 保存（含分类校验与关键词自动提取）
         return Result.ok();
     }
 
     @Operation(summary = "删除知识")
     @DeleteMapping("/{id}")
     public Result<Void> remove(@PathVariable String id) {
-        // TODO(成员3)：调用 KnowledgeBaseService 删除
+        // TODO(成员2)：调用 KnowledgeBaseService 删除
         return Result.ok();
     }
 }

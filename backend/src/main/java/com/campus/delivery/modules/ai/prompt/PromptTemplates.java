@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 提示词模板管理。主责：成员1（点餐/搜索/推荐）、成员3（客服）。
+ * 提示词模板管理。主责：成员3（AI 能力层）。
  *
  * <p>模板的唯一来源是 {@code backend/src/main/resources/prompts/*.md}，
  * 模板名即文件名（不含扩展名），便于非开发成员直接评审与迭代提示词。

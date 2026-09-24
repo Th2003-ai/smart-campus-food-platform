@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 商户端店铺管理接口。主责：成员2。
+ * 商户端店铺管理接口。主责：成员2（业务服务层）。
  */
 @Tag(name = "04-商户端·店铺管理", description = "店铺信息维护、营业状态设置")
 @RestController

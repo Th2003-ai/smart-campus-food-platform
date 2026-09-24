@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 个人中心接口。主责：成员1。
+ * 个人中心接口。主责：成员2（业务服务层）。
  *
  * <p>所有接口从 {@link UserContext} 取当前登录人，不接受前端传入 userId，避免越权。
  */

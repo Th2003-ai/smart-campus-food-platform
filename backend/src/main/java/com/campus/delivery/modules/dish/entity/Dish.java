@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 菜品表。主责：成员2。
+ * 菜品表。主责：成员4（数据存储层）。
  *
  * <p>{@code tags} 与 {@code ingredients} 是 AI 语义搜索、忌口/过敏原过滤的关键字段。
  */

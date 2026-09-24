@@ -5,7 +5,7 @@ import com.campus.delivery.modules.user.entity.UserAddress;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 收货地址数据访问。主责：成员1。
+ * 收货地址数据访问。主责：成员4（数据存储层）。
  */
 @Mapper
 public interface UserAddressMapper extends BaseMapper<UserAddress> {

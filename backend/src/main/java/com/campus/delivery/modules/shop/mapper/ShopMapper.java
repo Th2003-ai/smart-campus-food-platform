@@ -5,7 +5,7 @@ import com.campus.delivery.modules.shop.entity.Shop;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 店铺数据访问。主责：成员2。
+ * 店铺数据访问。主责：成员4（数据存储层）。
  */
 @Mapper
 public interface ShopMapper extends BaseMapper<Shop> {

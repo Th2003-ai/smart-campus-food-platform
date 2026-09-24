@@ -5,7 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * 评价标签数据访问。主责：成员2，写入方：AI 评价分析。
+ * 评价标签数据访问。主责：成员4（数据存储层），写入方：AI 评价分析。
  *
  * <p>标签只做追加写入与聚合统计，无需实体映射，直接用注解 SQL。
  */

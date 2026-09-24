@@ -23,7 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 配送服务：订单大厅、抢单、取餐、送达、收入统计。主责：成员4（P2 可选加分）。
+ * 配送服务：订单大厅、抢单、取餐、送达、收入统计。主责：成员2（业务服务层，P2 可选加分）。
  *
  * <p>抢单并发控制（需求文档 5.6.2 难点二）：
  * <ol>
@@ -110,7 +110,7 @@ public class DeliveryService {
         Order order = orderService.riderTransit(orderId, riderId, OrderStatus.FINISHED);
         riderMapper.decreaseDelivering(riderId, order.getDeliveryFee() == null
                 ? BigDecimal.ZERO : order.getDeliveryFee());
-        // TODO(成员4)：更新 delivery_record（取餐/送达时间、配送耗时、配送费）
+        // TODO(成员2)：更新 delivery_record（取餐/送达时间、配送耗时、配送费）
         return order;
     }
 

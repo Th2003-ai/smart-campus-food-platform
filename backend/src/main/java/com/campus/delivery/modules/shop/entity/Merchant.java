@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 商户表。主责：成员2（商品与经营域）。
+ * 商户表。主责：成员4（数据存储层）。
  *
  * <p>说明：商户是「商品与经营域」的主体，因此放在 shop 模块；
  * 账号登录信息在 {@code sys_user} 中，通过 user_id 关联。

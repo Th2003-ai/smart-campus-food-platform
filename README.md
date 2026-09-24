@@ -44,7 +44,7 @@ campus-ai-delivery/
 │       │   ├── common/         统一响应、异常、枚举（全组共用）
 │       │   ├── config/         Web / Redis / WebSocket / 大模型配置
 │       │   ├── security/       JWT、角色枚举、登录上下文、权限注解与拦截器
-│       │   ├── modules/        业务模块，按模块归属到人
+│       │   ├── modules/        业务模块（按四层横向归属到人，见 docs/02）
 │       │   │   ├── user/       账号与登录、学生资料、饮食档案、地址
 │       │   │   ├── shop/       店铺
 │       │   │   ├── dish/       菜品与分类、库存
@@ -58,7 +58,7 @@ campus-ai-delivery/
 │       └── resources/
 │           ├── application.yml 主配置
 │           ├── application-dev.yml 开发环境配置（本地私密配置不入库）
-│           ├── mapper/         MyBatis XML（复杂 SQL）
+│           ├── mapper/         MyBatis XML（复杂 SQL 需要时新增）
 │           └── prompts/        大模型提示词模板
 ├── frontend/                   前端 Vue 3 工程（四端同一工程，按路由分区）
 │   └── src/
@@ -129,27 +129,29 @@ npm run dev           # 默认 http://localhost:5173
 
 ---
 
-## 五、四人分工
+## 五、四人分工（按四层横向切分，一人一层）
 
-详细边界、协作接口与数据责任域见 [`docs/02-四人分工与模块归属.md`](docs/02-四人分工与模块归属.md)。
+分工依据需求文档**图 2-1 系统总体功能架构图**的四层结构。详细归属规则、层间依赖与协作接口见
+[`docs/02-四人分工与模块归属.md`](docs/02-四人分工与模块归属.md)。
 
-| 成员 | 主要负责 | 主责后端模块 | 主责前端分区 |
+| 成员 | 负责层 | 主责目录与文件 | 对应图 2-1 |
 | --- | --- | --- | --- |
-| 成员1 | 学生端：浏览、语义搜索、AI 点餐、购物车、个人中心与饮食画像 | `modules/user`（画像部分）、`cart`、`ai`（点餐/搜索/推荐） | `views/student` |
-| 成员2 | 商户端：店铺菜品、库存、订单处理、评价管理、AI 经营辅助 | `modules/shop`、`dish`、`review`、`ai`（评价/经营分析） | `views/merchant` |
-| 成员3 | 管理员端与 AI 客服：审核、数据看板、知识库、客服工单 | `modules/admin`、`ai`（客服/知识库） | `views/admin` |
-| 成员4 | 平台基础：登录权限、订单状态机、Redis、WebSocket；可选模拟骑手 | `security`、`modules/order`、`delivery`、`websocket` | `views/rider` |
+| 成员1 | 前端展示层 | `frontend/**`（60 个文件）：四端视图、四端布局、路由与角色守卫、接口封装、状态管理 | 学生端 / 商户端 / 骑手端 / 管理员端 |
+| 成员2 | 业务服务层 | 9 个模块的 `controller`/`service`/`dto`（`ai` 模块除外）、`common`、`security`、`websocket`（62 个文件） | 用户/店铺、菜品/订单、骑手/配送、评价/客服、饮食分析 |
+| 成员3 | AI 能力层 | `modules/ai` 的 `client`/`controller`/`dto`/`prompt`/`service`、`resources/prompts`（22 个文件） | 语义理解、智能推荐、智能客服、评价分析、经营分析 |
+| 成员4 | 数据存储层 | 全部 `entity`/`mapper`、`database/**`、Redis 与文件存储配置（41 个文件） | MySQL 业务数据、Redis 缓存、对象存储、日志与审计 |
 
-> 四人共同负责：需求评审、数据库总设计、接口联调、核心流程测试与最终文档。
+> **每个文件只属于一个人**：所有表结构、实体与 Mapper 由成员4 统一维护；AI 层与业务层之间只通过 Service 门面互相调用。
+> 四人共同负责：需求评审、接口联调、核心流程测试与最终文档。
 
 ---
 
 ## 六、协作约定
 
-- 分支模型：`main`（可演示）← `dev`（集成）← `feature/<模块>-<简述>`。
+- 分支模型：`main`（可演示）← `dev`（集成）← `feature/<层或模块>-<简述>`。
 - 提交信息：`feat(模块): 说明` / `fix(模块): 说明` / `docs: 说明`。
 - 接口先行：先在 `docs/03-接口规范与协作约定.md` 登记接口，再各自开发；统一响应体 `Result<T>`。
-- 数据库：表结构变更走 `database/schema.sql`，由数据责任域负责人提交，其他人不得直接改表。
+- 数据库：表结构变更走 `database/schema.sql`，由数据存储层（成员4）统一提交，其他人不得直接改表。
 
 ---
 
@@ -166,6 +168,7 @@ npm run dev           # 默认 http://localhost:5173
 - [x] 前端工程骨架：Vue 3 + Vite + TypeScript + Element Plus，四端布局、路由与角色守卫、接口封装、WebSocket 客户端
 - [x] 工程文档与可视化：`docs/01~04` 与 `docs/architecture.html`
 - [x] 编译验证：`mvn -DskipTests compile` 通过（110 个源文件）
+- [x] 本地运行验证：MySQL 8 导入 35 张表与演示数据，后端启动后接口文档返回 200，四个演示账号（学生/商户/骑手/管理员）登录均签发 JWT；前端启动后经 `/api` 代理调用登录接口返回 `role=STUDENT`
 
 待完成：
 

@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AI 自然语言点餐。主责：成员1。
+ * AI 自然语言点餐。主责：成员3（AI 能力层）。
  *
  * <p>流程（需求文档 4.3 时序）：
  * <pre>

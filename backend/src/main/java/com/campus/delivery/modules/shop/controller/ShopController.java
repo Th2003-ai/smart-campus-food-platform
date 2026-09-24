@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 店铺浏览接口（公开）。主责：成员2，使用方：成员1（学生端首页）。
+ * 店铺浏览接口（公开）。主责：成员2（业务服务层），使用方：成员1（学生端首页）。
  */
 @Tag(name = "03-店铺（公开）", description = "店铺列表与详情")
 @RestController

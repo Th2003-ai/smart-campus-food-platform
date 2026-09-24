@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * AI 能力接口（商户端）。主责：成员2。
+ * AI 能力接口（商户端）。主责：成员3（AI 能力层）。
  */
 @Tag(name = "11-AI·商户端", description = "评价分析、评价报告、经营简报")
 @RestController

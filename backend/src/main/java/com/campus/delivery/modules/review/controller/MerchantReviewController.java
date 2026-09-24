@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 商户端评价管理接口。主责：成员2。
+ * 商户端评价管理接口。主责：成员2（业务服务层）。
  */
 @Tag(name = "12-商户端·评价管理", description = "评价查看、回复、标签聚合、评分概览")
 @RestController

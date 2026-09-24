@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 /**
- * 抢单日志数据访问。主责：成员4。
+ * 抢单日志数据访问。主责：成员4（数据存储层）。
  *
  * <p>抢单日志只做追加写入与统计，无需实体映射，直接用注解 SQL。
  */

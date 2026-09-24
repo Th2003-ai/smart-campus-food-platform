@@ -24,7 +24,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 
 /**
- * 认证服务：登录、注册、退出。主责：成员4。
+ * 认证服务：登录、注册、退出。主责：成员2（业务服务层）。
  *
  * <p>安全要点（需求文档 5.6.1）：
  * <ul>
@@ -124,7 +124,7 @@ public class AuthService {
      * {@code RedisKeys.TOKEN_BLACKLIST} 并在拦截器中校验（预留实现）。
      */
     public void logout(String token) {
-        // TODO(成员4): 将 token 写入 Redis 黑名单，过期时间取 Token 剩余有效期
+        // TODO(成员2): 将 token 写入 Redis 黑名单，过期时间取 Token 剩余有效期
         log.info("用户退出登录");
     }
 

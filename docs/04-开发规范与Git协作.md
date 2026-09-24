@@ -5,10 +5,10 @@
 ```text
 main       可演示、可交付的稳定版本，只接受来自 dev 的合并
  └── dev   集成分支，四人日常提交汇总到这里
-      ├── feature/user-ai-order        成员1
-      ├── feature/merchant-dish        成员2
-      ├── feature/admin-dashboard      成员3
-      └── feature/order-statemachine   成员4
+      ├── feature/frontend-views       成员1（前端展示层）
+      ├── feature/business-service     成员2（业务服务层）
+      ├── feature/ai-capability        成员3（AI 能力层）
+      └── feature/data-storage         成员4（数据存储层）
 ```
 
 规则：
@@ -16,7 +16,7 @@ main       可演示、可交付的稳定版本，只接受来自 dev 的合并
 1. 任何人不得直接向 `main` 提交。
 2. 一个 feature 分支只做一件事，完成后向 `dev` 提 PR，由另一位成员评审后合并。
 3. 合并前先 `git pull --rebase origin dev`，避免无意义的合并提交。
-4. 阶段性演示前，由成员4 将 `dev` 合并到 `main` 并打 tag，例如 `v0.1-需求与骨架`。
+4. 阶段性演示前，由成员2（业务服务层，兼联调组织）将 `dev` 合并到 `main` 并打 tag，例如 `v0.1-需求与骨架`。
 
 ## 二、提交信息规范
 
@@ -63,7 +63,7 @@ docs(readme): 补充本地启动步骤
 
 ## 四、数据库变更
 
-1. 表结构只通过 `database/schema.sql` 变更，谁的数据责任域谁提交。
+1. 表结构只通过 `database/schema.sql` 变更，由数据存储层（成员4）统一提交，其他人不得直接改表。
 2. 已建表结构变更需在 PR 描述中说明：改了哪张表、加了什么字段、是否影响他人。
 3. 所有表必须包含：主键、`create_time`、`update_time`，需要逻辑删除的表加 `deleted`。
 4. 金额字段统一 `DECIMAL(10,2)`，状态字段统一 `TINYINT`，主键统一 `VARCHAR(32)`。

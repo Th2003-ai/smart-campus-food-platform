@@ -2,7 +2,7 @@
   <div class="page">
     <el-card shadow="never">
       <template #header>经营概览</template>
-      <!-- TODO(成员2)：GET /merchant/orders?status=0 待处理订单；GET /merchant/reviews/overview 评价概览；今日营业额 -->
+      <!-- TODO(成员1)：GET /merchant/orders?status=0 待处理订单；GET /merchant/reviews/overview 评价概览；今日营业额 -->
       <el-row :gutter="16">
         <el-col :span="6"><el-statistic title="今日订单" :value="0" /></el-col>
         <el-col :span="6"><el-statistic title="今日营业额" :value="0" /></el-col>
@@ -15,5 +15,5 @@
 </template>
 
 <script setup lang="ts">
-// TODO(成员2)：聚合订单、评价、销量数据；图表数据由后端聚合接口提供
+// TODO(成员1)：聚合订单、评价、销量数据；图表数据由后端聚合接口提供
 </script>

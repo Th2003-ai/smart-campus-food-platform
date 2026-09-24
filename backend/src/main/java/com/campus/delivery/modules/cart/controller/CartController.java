@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 购物车接口。主责：成员1。
+ * 购物车接口。主责：成员2（业务服务层）。
  */
 @Tag(name = "07-购物车", description = "加入购物车、数量调整、勾选、删除")
 @RestController

@@ -5,7 +5,7 @@ import com.campus.delivery.modules.shop.entity.Merchant;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 商户数据访问。主责：成员2。
+ * 商户数据访问。主责：成员4（数据存储层）。
  */
 @Mapper
 public interface MerchantMapper extends BaseMapper<Merchant> {

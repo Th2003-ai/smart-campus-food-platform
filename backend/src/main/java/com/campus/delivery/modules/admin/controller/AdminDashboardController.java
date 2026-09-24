@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 管理端数据看板接口。主责：成员3。
+ * 管理端数据看板接口。主责：成员2（业务服务层）。
  */
 @Tag(name = "13-管理端·数据看板", description = "核心指标、趋势、排行、占比")
 @RestController

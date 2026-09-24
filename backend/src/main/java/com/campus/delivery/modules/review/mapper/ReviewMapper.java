@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 评价数据访问。主责：成员2。
+ * 评价数据访问。主责：成员4（数据存储层）。
  */
 @Mapper
 public interface ReviewMapper extends BaseMapper<Review> {

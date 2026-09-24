@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 大模型统一客户端。主责：成员1（点餐/搜索/推荐）与成员3（客服）。
+ * 大模型统一客户端。主责：成员3（AI 能力层）。
  *
  * <p>职责：
  * <ol>

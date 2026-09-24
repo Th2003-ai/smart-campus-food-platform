@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 订单状态流转记录。主责：成员4。
+ * 订单状态流转记录。主责：成员4（数据存储层）。
  *
  * <p>每次状态变更追加一条，实现订单全程可追溯（需求文档 5.6.2）。
  */

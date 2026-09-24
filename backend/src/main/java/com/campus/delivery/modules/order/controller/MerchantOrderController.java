@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 商户端订单处理接口。主责：成员2（调用成员4 的状态机）。
+ * 商户端订单处理接口。主责：成员2（业务服务层）。
  */
 @Tag(name = "09-商户端·订单处理", description = "订单列表、接单、出餐、拒单")
 @RestController

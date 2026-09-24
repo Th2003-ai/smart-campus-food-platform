@@ -9,9 +9,9 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 评价表。主责：成员2。
+ * 评价表。主责：成员4（数据存储层）。
  *
- * <p>{@code aiTags} 与 {@code sentiment} 由 AI 模块（成员1/成员2）在评价提交后异步写入，
+ * <p>{@code aiTags} 与 {@code sentiment} 由 AI 能力层（成员3）在评价提交后异步写入，
  * 并记录 {@code aiModelVersion} 与 {@code aiAnalyzeTime}，保证 AI 结果可追溯。
  */
 @Data

@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 个性化推荐。主责：成员1（需求文档 5.6.5 难点五）。
+ * 个性化推荐。主责：成员3（AI 能力层，需求文档 5.6.5 难点五）。
  *
  * <p>两阶段策略：
  * <ol>
@@ -107,7 +107,7 @@ public class RecommendService {
         result.put("modelVersion", llmClient.modelVersion());
 
         redisTemplate.opsForValue().set(cacheKey, result, CACHE_MINUTES, TimeUnit.MINUTES);
-        // TODO(成员1)：把推荐结果写入 recommend_record（含输入、解析条件、菜品ID、模型版本、校验状态）
+        // TODO(成员3)：把推荐结果写入 recommend_record（含输入、解析条件、菜品ID、模型版本、校验状态）
         return result;
     }
 

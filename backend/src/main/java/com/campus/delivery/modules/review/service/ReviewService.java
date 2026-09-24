@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 评价服务。主责：成员2。
+ * 评价服务。主责：成员2（业务服务层）。
  *
  * <p>评价提交后由 AI 模块异步做标签提取与情感分析（调用 {@code ReviewAnalysisService}），
  * 分析结果回写 {@code review.ai_tags} / {@code review.sentiment} 并写入 {@code review_tag}。
@@ -72,7 +72,7 @@ public class ReviewService {
         review.setIsAnonymous(Boolean.TRUE.equals(dto.getAnonymous()) ? 1 : 0);
         reviewMapper.insert(review);
 
-        // TODO(成员2 + 成员1)：评价图片落库 review_image；调用 AI 做标签提取与情感分析
+        // TODO(成员2 + 成员3)：评价图片落库 review_image；调用 AI 做标签提取与情感分析
         //   reviewAnalysisService.analyzeAsync(review.getId());
         log.info("评价提交成功: reviewId={}, orderId={}", review.getId(), order.getId());
         return review;

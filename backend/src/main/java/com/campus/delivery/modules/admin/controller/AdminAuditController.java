@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 商户与骑手审核接口。主责：成员3（数据写入由对应业务域负责）。
+ * 商户与骑手审核接口。主责：成员2（业务服务层）。
  */
 @Tag(name = "16-管理端·审核与处置", description = "商户审核、骑手审核、违规处置")
 @RestController
@@ -28,7 +28,7 @@ public class AdminAuditController {
     public Result<Void> auditMerchant(@PathVariable String id,
                                       @RequestParam boolean pass,
                                       @RequestParam(required = false) String remark) {
-        // TODO(成员3)：调用 ShopService.auditMerchant(id, pass, remark, UserContext.getUserId())
+        // TODO(成员2)：调用 ShopService.auditMerchant(id, pass, remark, UserContext.getUserId())
         return Result.ok();
     }
 
@@ -37,21 +37,21 @@ public class AdminAuditController {
     public Result<Void> auditRider(@PathVariable String id,
                                    @RequestParam boolean pass,
                                    @RequestParam(required = false) String remark) {
-        // TODO(成员3)：调用 DeliveryService.auditRider(id, pass, remark)
+        // TODO(成员2)：调用 DeliveryService.auditRider(id, pass, remark)
         return Result.ok();
     }
 
     @Operation(summary = "封禁/解封店铺")
     @PostMapping("/shop/{id}/ban")
     public Result<Void> banShop(@PathVariable String id, @RequestParam boolean ban) {
-        // TODO(成员3)：调用 ShopService.updateBanStatus(id, ban)
+        // TODO(成员2)：调用 ShopService.updateBanStatus(id, ban)
         return Result.ok();
     }
 
     @Operation(summary = "封禁/解封骑手")
     @PostMapping("/rider/{id}/ban")
     public Result<Void> banRider(@PathVariable String id, @RequestParam boolean ban) {
-        // TODO(成员3)：调用 DeliveryService.updateAuditStatus / 封禁逻辑
+        // TODO(成员2)：调用 DeliveryService.updateAuditStatus / 封禁逻辑
         return Result.ok();
     }
 }

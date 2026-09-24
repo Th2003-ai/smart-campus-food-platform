@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * 用户与画像服务。主责：成员1。
+ * 用户与画像服务。主责：成员2（业务服务层）。
  *
  * <p>覆盖需求文档 5.1.7 个人中心与饮食分析、5.6.5 用户画像与推荐冷启动的数据基础。
  */

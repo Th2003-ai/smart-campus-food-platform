@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 客服知识库。主责：成员3（维护在管理端），使用方：AI 智能客服。
+ * 客服知识库。主责：成员4（数据存储层），使用方：AI 能力层 · 成员3。
  */
 @Data
 @TableName("knowledge_base")

@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 认证接口（公开）。主责：成员4。
+ * 认证接口（公开）。主责：成员2（业务服务层）。
  */
 @Tag(name = "01-认证", description = "登录、注册、退出")
 @RestController

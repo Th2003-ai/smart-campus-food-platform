@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 学生端订单接口。主责：成员4。
+ * 学生端订单接口。主责：成员2（业务服务层）。
  */
 @Tag(name = "08-订单（学生端）", description = "下单、订单列表、详情、取消")
 @RestController

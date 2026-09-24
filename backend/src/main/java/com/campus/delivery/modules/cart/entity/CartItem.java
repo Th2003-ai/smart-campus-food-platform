@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 购物车表。主责：成员1。
+ * 购物车表。主责：成员4（数据存储层）。
  *
  * <p>同一学生的购物车按店铺分组，只有同一店铺的菜品才能一起结算。
  */

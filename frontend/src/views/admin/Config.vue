@@ -2,7 +2,7 @@
   <div class="page">
     <el-card shadow="never">
       <template #header>系统配置</template>
-      <!-- TODO(成员3)：sys_config 与 ai_config 维护（轮播图、平台公告、AI 模型参数） -->
+      <!-- TODO(成员1)：sys_config 与 ai_config 维护（轮播图、平台公告、AI 模型参数） -->
       <el-empty description="待实现：平台参数、AI 模型配置（api-url / model / temperature）、轮播图管理" />
       <el-alert
         type="warning"
@@ -15,5 +15,5 @@
 </template>
 
 <script setup lang="ts">
-// TODO(成员3)：系统配置读写；敏感配置项脱敏展示
+// TODO(成员1)：系统配置读写；敏感配置项脱敏展示
 </script>

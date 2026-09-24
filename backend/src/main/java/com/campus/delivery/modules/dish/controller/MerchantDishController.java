@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 商户端菜品管理接口。主责：成员2。
+ * 商户端菜品管理接口。主责：成员2（业务服务层）。
  */
 @Tag(name = "06-商户端·菜品管理", description = "菜品增删改查、上下架、库存、分类")
 @RestController

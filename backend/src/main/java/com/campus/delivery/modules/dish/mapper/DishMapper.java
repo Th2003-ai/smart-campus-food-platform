@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Update;
 import java.util.List;
 
 /**
- * 菜品数据访问。主责：成员2。
+ * 菜品数据访问。主责：成员4（数据存储层）。
  */
 @Mapper
 public interface DishMapper extends BaseMapper<Dish> {

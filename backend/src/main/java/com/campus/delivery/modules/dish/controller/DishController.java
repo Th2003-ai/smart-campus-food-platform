@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 菜品浏览接口（公开）。主责：成员2，使用方：成员1（学生端）。
+ * 菜品浏览接口（公开）。主责：成员2（业务服务层），使用方：成员1（前端展示层）。
  */
 @Tag(name = "05-菜品（公开）", description = "菜品列表、详情、关键词检索")
 @RestController

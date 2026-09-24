@@ -5,7 +5,7 @@ import com.campus.delivery.modules.user.entity.SysUser;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 账号数据访问。主责：成员4。
+ * 账号数据访问。主责：成员4（数据存储层）。
  *
  * <p>单表操作继承 {@link BaseMapper} 即可；复杂统计 SQL 写在
  * {@code resources/mapper/UserMapper.xml} 中。

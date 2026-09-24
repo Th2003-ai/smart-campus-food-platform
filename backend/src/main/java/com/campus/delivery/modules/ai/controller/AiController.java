@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * AI 能力接口（学生端）。主责：成员1（点餐/搜索/推荐/饮食分析）、成员3（智能客服）。
+ * AI 能力接口（学生端）。主责：成员3（AI 能力层）。
  */
 @Tag(name = "10-AI·学生端", description = "AI 点餐、语义搜索、个性化推荐、饮食分析、智能客服")
 @RestController

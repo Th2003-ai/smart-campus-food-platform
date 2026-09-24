@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 订单数据访问。主责：成员4。
+ * 订单数据访问。主责：成员4（数据存储层）。
  *
  * <p>单表操作继承 {@link BaseMapper}；数据看板所需的统计查询写在本接口
  * （复杂 SQL 建议移到 {@code resources/mapper/OrderMapper.xml}）。
@@ -19,7 +19,7 @@ import java.util.Map;
 public interface OrderMapper extends BaseMapper<Order> {
 
     /**
-     * 数据看板：按日统计订单量与销售额（供成员3调用）。
+     * 数据看板：按日统计订单量与销售额（供业务服务层 · 成员2 的管理端看板调用）。
      *
      * <p>返回字段：stat_date / order_count / sales_amount
      */

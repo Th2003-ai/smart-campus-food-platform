@@ -7,7 +7,7 @@
           <el-button type="primary" :loading="loading" @click="onGenerate">生成经营简报</el-button>
         </div>
       </template>
-      <!-- TODO(成员2)：GET /merchant/ai/business-report 经营简报；GET /merchant/ai/review-report 评价报告 -->
+      <!-- TODO(成员1)：GET /merchant/ai/business-report 经营简报；GET /merchant/ai/review-report 评价报告 -->
       <el-empty description="待实现：热销/滞销菜品、经营建议、评价口碑亮点与吐槽点" />
     </el-card>
   </div>
@@ -18,10 +18,10 @@ import { ref } from 'vue'
 
 const loading = ref(false)
 
-// TODO(成员2)：调用 businessReport()，渲染 summary / suggestions / hotDishes / slowDishes
+// TODO(成员1)：调用 businessReport()，渲染 summary / suggestions / hotDishes / slowDishes
 function onGenerate() {
   // eslint-disable-next-line no-console
-  console.log('TODO(成员2): business report')
+  console.log('TODO(成员1): business report')
 }
 </script>
 

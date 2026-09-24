@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 
 /**
- * 骑手数据访问。主责：成员4。
+ * 骑手数据访问。主责：成员4（数据存储层）。
  */
 @Mapper
 public interface RiderMapper extends BaseMapper<Rider> {

@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 评价接口（学生提交 + 公开查看）。主责：成员2。
+ * 评价接口（学生提交 + 公开查看）。主责：成员2（业务服务层）。
  */
 @Tag(name = "11-评价", description = "提交评价、查看评价")
 @RestController

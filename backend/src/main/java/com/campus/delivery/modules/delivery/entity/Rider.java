@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 骑手表。主责：成员4（P2 可选加分功能）。
+ * 骑手表。主责：成员4（数据存储层，P2 可选加分功能）。
  *
  * <p>不接入真实骑手硬件与定位，仅做校园内简化的派单/抢单与状态流转。
  */

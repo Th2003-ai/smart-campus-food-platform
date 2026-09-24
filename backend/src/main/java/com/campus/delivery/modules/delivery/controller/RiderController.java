@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 骑手端接口（P2 可选加分）。主责：成员4。
+ * 骑手端接口（P2 可选加分）。主责：成员2（业务服务层）。
  *
  * <p>核心功能稳定后再开发；未开发时不影响主线编译与运行。
  */

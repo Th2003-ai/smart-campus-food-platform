@@ -18,7 +18,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * 客服工单服务。主责：成员3。
+ * 客服工单服务。主责：成员2（业务服务层）。
  *
  * <p>闭环：AI 客服无法回答 → 自动建单 → 管理员处理 → 关闭工单。
  */

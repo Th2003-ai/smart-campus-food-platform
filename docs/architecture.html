@@ -98,52 +98,52 @@
     <div class="note">技术基线：Spring Boot 3.2 + MyBatis-Plus + MySQL + Redis + WebSocket（后端），Vue 3 + Vite + TypeScript + Element Plus（前端），大模型走 OpenAI 兼容 HTTP 接口。</div>
   </div>
 
-  <h2>二、四人分工与模块归属</h2>
+  <h2>二、四人分工与模块归属（按四层横向切分，一人一层）</h2>
   <div class="card" style="padding:0;overflow:auto">
     <table>
       <thead>
         <tr>
-          <th>成员</th><th>端</th><th>业务范围</th>
-          <th>后端包（<code>modules/</code>）</th><th>前端目录</th><th>数据责任域</th>
+          <th>成员</th><th>负责层</th><th>主责目录与文件</th>
+          <th>对应图 2-1</th><th>主要交付物</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td><span class="tag t1">成员1</span></td>
-          <td>学生端</td>
-          <td>首页浏览、语义搜索、AI 点餐、购物车、个人中心与饮食画像</td>
-          <td><code>user</code>（画像/地址）、<code>cart</code>、<code>ai</code>（点餐 / 搜索 / 推荐 / 饮食分析）</td>
-          <td><code>views/student</code></td>
-          <td>用户与画像域（主责）</td>
+          <td><b>前端展示层</b></td>
+          <td><code>frontend/**</code>（60 个文件）：四端视图、四端布局、路由与角色守卫、接口封装、状态管理、WebSocket 客户端</td>
+          <td>学生端 / 商户端 / 骑手端 / 管理员端</td>
+          <td>四端页面可操作；按接口清单完成联调；列表页具备加载中 / 空 / 错误三态</td>
         </tr>
         <tr>
           <td><span class="tag t2">成员2</span></td>
-          <td>商户端</td>
-          <td>店铺菜品、库存、订单处理、评价管理、AI 经营辅助</td>
-          <td><code>shop</code>、<code>dish</code>、<code>review</code>、<code>ai</code>（评价分析 / 经营分析）</td>
-          <td><code>views/merchant</code></td>
-          <td>商品与经营域（主责）</td>
+          <td><b>业务服务层</b></td>
+          <td>9 个模块的 <code>controller</code> / <code>service</code> / <code>dto</code>（<code>ai</code> 模块除外）、<code>common</code>、<code>security</code>、<code>websocket</code>（62 个文件）</td>
+          <td>用户/店铺、菜品/订单、骑手/配送、评价/客服、饮食分析</td>
+          <td>业务接口按 <code>docs/03</code> 落地；统一响应体与权限校验；订单状态机；实时推送</td>
         </tr>
         <tr>
           <td><span class="tag t3">成员3</span></td>
-          <td>管理员端</td>
-          <td>商户/骑手审核、数据看板、系统配置、知识库、客服工单</td>
-          <td><code>admin</code>、<code>ai</code>（智能客服 / 知识库）</td>
-          <td><code>views/admin</code></td>
-          <td>AI 与运营域（主责）</td>
+          <td><b>AI 能力层</b></td>
+          <td><code>modules/ai</code> 的 <code>client</code> / <code>controller</code> / <code>dto</code> / <code>prompt</code> / <code>service</code>、<code>resources/prompts/*.md</code>（8 个模板）（22 个文件）</td>
+          <td>语义理解、智能推荐、智能客服、评价分析、经营分析</td>
+          <td>5 项 AI 能力可演示；结构化输出校验与关键词兜底；提示词模板可评审可迭代</td>
         </tr>
         <tr>
           <td><span class="tag t4">成员4</span></td>
-          <td>骑手端 + 平台基础</td>
-          <td>登录鉴权、订单状态机、Redis、WebSocket、骑手抢单与配送</td>
-          <td><code>security</code>、<code>order</code>、<code>delivery</code>、<code>websocket</code></td>
-          <td><code>views/rider</code></td>
-          <td>交易与配送域（主责）</td>
+          <td><b>数据存储层</b></td>
+          <td>全部 <code>entity</code> / <code>mapper</code>、<code>resources/mapper/**</code>、<code>database/**</code>、Redis 与文件存储配置（41 个文件）</td>
+          <td>MySQL 业务数据、Redis 缓存、对象存储、日志与审计</td>
+          <td>35 张表脚本可重复执行；数据字典；缓存键规范；图片对象存储与审计日志</td>
         </tr>
       </tbody>
     </table>
   </div>
-  <div class="note">说明：需求文档第 8 章以「成员1—成员4」编号给出分工，姓名待组内确认后替换。</div>
+  <div class="note">
+    说明：需求文档第 8 章以「成员1—成员4」编号给出分工，姓名待组内确认后替换。
+    归属规则（193 个文件零重叠）、层间依赖与并行开发策略、协作接口见 <code>docs/02-四人分工与模块归属.md</code>；
+    代码中的 <code>主责：成员N</code> 与 <code>TODO(成员N)</code> 标注已按本表全量核对一致。
+  </div>
 
   <h2>三、订单状态机（全系统唯一改状态入口）</h2>
   <div class="card">

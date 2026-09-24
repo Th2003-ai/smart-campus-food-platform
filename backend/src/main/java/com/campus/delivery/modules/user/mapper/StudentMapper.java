@@ -5,7 +5,7 @@ import com.campus.delivery.modules.user.entity.Student;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 学生用户数据访问。主责：成员1。
+ * 学生用户数据访问。主责：成员4（数据存储层）。
  */
 @Mapper
 public interface StudentMapper extends BaseMapper<Student> {

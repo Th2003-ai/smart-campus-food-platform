@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * AI 评价分析。主责：成员2（需求文档 5.6.4 难点四）。
+ * AI 评价分析。主责：成员3（AI 能力层，需求文档 5.6.4 难点四）。
  *
  * <p>能力：
  * <ol>
@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  *   <li>店铺报告：汇总标签做词频聚合，生成标签云、好评点/吐槽点排行与改进建议。</li>
  * </ol>
  *
- * <p>结果统一通过 {@link ReviewService#saveAiAnalysis} 回写，保证评价表只有成员2 的服务写入。
+ * <p>结果统一通过 {@link ReviewService#saveAiAnalysis} 回写，保证评价表只有业务服务层（成员2）写入。
  */
 @Slf4j
 @Service

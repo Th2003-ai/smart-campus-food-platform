@@ -84,11 +84,11 @@ campus:
     storage: local
     local-path: ./uploads
     url-prefix: /static
-  # 跨域允许来源（前端开发服务器地址）
+  # 跨域允许来源（前端开发服务器地址，多个用英文逗号分隔）
+  # 注意：必须写成逗号分隔的字符串，不能用 YAML 列表（- 开头），
+  #       否则 WebMvcConfig 的 @Value("${campus.cors.allowed-origins}") 无法解析。
   cors:
-    allowed-origins:
-      - http://localhost:5173
-      - http://127.0.0.1:5173
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173
 
 logging:
   level:

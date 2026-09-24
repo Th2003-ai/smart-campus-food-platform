@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 购物车服务。主责：成员1。
+ * 购物车服务。主责：成员2（业务服务层）。
  *
  * <p>跨模块调用约定：购物车需要菜品与店铺信息，通过 {@link DishService} 与
  * {@link ShopService} 获取，不直接访问对方的 Mapper（见 docs/02-四人分工与模块归属.md）。

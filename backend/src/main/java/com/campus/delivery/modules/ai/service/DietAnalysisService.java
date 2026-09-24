@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AI 饮食分析。主责：成员1（需求文档 5.5.5）。
+ * AI 饮食分析。主责：成员3（AI 能力层，需求文档 5.5.5）。
  *
  * <p>数据来源：学生的历史已完成订单明细 + 饮食档案。
  * 统计口径由后端计算（订单数、菜品构成、关键词命中），模型只负责生成健康建议与过敏原提醒，
@@ -118,7 +118,7 @@ public class DietAnalysisService {
                 result.put("summary", json.path("summary").asText(""));
                 result.put("suggestions", suggestions);
                 result.put("modelVersion", llmClient.modelVersion());
-                // TODO(成员1)：报告落库 diet_report（含统计区间、结构数据、营养数据、建议、模型版本）
+                // TODO(成员3)：报告落库 diet_report（含统计区间、结构数据、营养数据、建议、模型版本）
                 return result;
             }
         }

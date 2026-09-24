@@ -5,7 +5,7 @@ import com.campus.delivery.modules.dish.entity.DishCategory;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 菜品分类数据访问。主责：成员2。
+ * 菜品分类数据访问。主责：成员4（数据存储层）。
  */
 @Mapper
 public interface DishCategoryMapper extends BaseMapper<DishCategory> {

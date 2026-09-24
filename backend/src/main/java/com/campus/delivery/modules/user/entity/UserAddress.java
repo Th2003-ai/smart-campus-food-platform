@@ -10,7 +10,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 用户收货地址。主责：成员1。
+ * 用户收货地址。主责：成员4（数据存储层）。
  */
 @Data
 @TableName("user_address")

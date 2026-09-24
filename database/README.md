@@ -35,16 +35,16 @@ cd ../backend
 mvn -q compile exec:java -Dexec.mainClass=com.campus.delivery.common.util.PasswordGenerator
 ```
 
-## 四、表清单（25 张，按数据责任域分组）
+## 四、表清单（35 张，按业务域分组）
 
-| 责任域 | 主责 | 表 |
+| 业务域 | 表结构归属（业务使用方） | 表 |
 | --- | --- | --- |
-| 用户与画像域 | 成员1（权限协助：成员4） | `sys_user`、`student`、`diet_profile`、`user_address`、`user_favorite`、`merchant`、`rider`、`admin`、`sys_role_permission` |
-| 商品与经营域 | 成员2 | `shop_category`、`shop`、`dish_category`、`dish`、`dish_spec`、`dish_image`、`review`、`review_image`、`review_tag` |
-| 交易与配送域 | 成员4（协同：成员2） | `cart_item`、`orders`、`order_item`、`order_status_log`、`delivery_record`、`grab_log`、`payment_record` |
-| AI 与运营域 | 成员3（成员1/2 提供业务数据） | `ai_config`、`ai_chat_session`、`ai_chat_message`、`knowledge_base`、`ticket`、`recommend_record`、`diet_report` |
-| 日志与审计 | 成员4 | `operation_log` |
-| 系统配置 | 成员3 | `sys_config`、`banner` |
+| 用户与画像域 | 成员4（数据存储层）／业务使用：成员2 | `sys_user`、`student`、`diet_profile`、`user_address`、`user_favorite`、`merchant`、`rider`、`admin`、`sys_role_permission` |
+| 商品与经营域 | 成员4（数据存储层）／业务使用：成员2 | `shop_category`、`shop`、`dish_category`、`dish`、`dish_spec`、`dish_image`、`review`、`review_image`、`review_tag` |
+| 交易与配送域 | 成员4（数据存储层）／业务使用：成员2 | `cart_item`、`orders`、`order_item`、`order_status_log`、`delivery_record`、`grab_log`、`payment_record` |
+| AI 与运营域 | 成员4（数据存储层）／AI 使用：成员3 | `ai_config`、`ai_chat_session`、`ai_chat_message`、`knowledge_base`、`ticket`、`recommend_record`、`diet_report` |
+| 日志与审计 | 成员4（数据存储层） | `operation_log` |
+| 系统配置 | 成员4（数据存储层）／业务使用：成员2 | `sys_config`、`banner` |
 
 ## 五、关键设计说明
 
@@ -60,6 +60,6 @@ mvn -q compile exec:java -Dexec.mainClass=com.campus.delivery.common.util.Passwo
 
 ## 六、变更规则
 
-1. 表结构只通过 `schema.sql` 变更，由数据责任域负责人提交。
+1. 表结构只通过 `schema.sql` 变更，由数据存储层（成员4）统一提交，其他人不得直接改表。
 2. 已建表结构变更需在 PR 描述中说明：改了哪张表、加了什么字段、是否影响他人。
 3. 提交前在本地重建一次库，确认脚本可直接执行。

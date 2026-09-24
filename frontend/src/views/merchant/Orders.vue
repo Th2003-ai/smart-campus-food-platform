@@ -12,7 +12,7 @@
           </el-radio-group>
         </div>
       </template>
-      <!-- TODO(成员2)：GET /merchant/orders；接单 POST /{id}/accept；出餐 POST /{id}/ready；拒单 POST /{id}/reject -->
+      <!-- TODO(成员1)：GET /merchant/orders；接单 POST /{id}/accept；出餐 POST /{id}/ready；拒单 POST /{id}/reject -->
       <el-empty description="待实现：订单卡片、接单/出餐/拒单按钮、取餐码展示" />
     </el-card>
   </div>
@@ -23,10 +23,10 @@ import { ref } from 'vue'
 
 const status = ref<number | undefined>(0)
 
-// TODO(成员2)：新订单由 MerchantLayout 的 WebSocket（NEW_ORDER）触发刷新
+// TODO(成员1)：新订单由 MerchantLayout 的 WebSocket（NEW_ORDER）触发刷新
 function load() {
   // eslint-disable-next-line no-console
-  console.log('TODO(成员2): load shop orders, status =', status.value)
+  console.log('TODO(成员1): load shop orders, status =', status.value)
 }
 </script>
 

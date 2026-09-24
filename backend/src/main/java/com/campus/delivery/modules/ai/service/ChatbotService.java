@@ -24,7 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * AI 智能客服。主责：成员3（需求文档 4.4 / 5.5.4）。
+ * AI 智能客服。主责：成员3（AI 能力层，需求文档 4.4 / 5.5.4）。
  *
  * <p>流程：
  * <pre>

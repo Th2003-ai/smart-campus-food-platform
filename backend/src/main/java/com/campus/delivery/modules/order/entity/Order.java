@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 订单主表。主责：成员4。
+ * 订单主表。主责：成员4（数据存储层）。
  *
  * <p>{@code orderStatus} 只能通过 {@code OrderStateMachine} 变更，
  * {@code version} 为乐观锁版本号，防止并发下的非法状态写入。

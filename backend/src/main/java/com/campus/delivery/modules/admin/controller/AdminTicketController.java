@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 客服工单接口（管理端 + 学生端查看自己的工单）。主责：成员3。
+ * 客服工单接口（管理端 + 学生端查看自己的工单）。主责：成员2（业务服务层）。
  */
 @Tag(name = "14-客服工单", description = "工单列表、处理、关闭")
 @RestController

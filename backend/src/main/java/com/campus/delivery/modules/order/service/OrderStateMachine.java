@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 订单状态机。主责：成员4。
+ * 订单状态机。主责：成员2（业务服务层）。
  *
  * <p><b>全系统唯一允许修改 {@code orders.order_status} 的入口</b>，
  * 各端（学生取消、商户接单出餐、骑手取餐送达）都必须调用本类。
