@@ -19,7 +19,7 @@ import org.springframework.util.StringUtils;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 店铺服务。主责：成员2（业务服务层）。
+ * 店铺服务。主责：成员2。
  *
  * <p>要点：
  * <ul>

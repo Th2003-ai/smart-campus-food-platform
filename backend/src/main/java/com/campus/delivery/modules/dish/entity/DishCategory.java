@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 菜品分类表（店铺内分类）。主责：成员4（数据存储层）。
+ * 菜品分类表（店铺内分类）。主责：成员2。
  */
 @Data
 @TableName("dish_category")
