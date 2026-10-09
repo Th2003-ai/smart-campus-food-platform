@@ -21,19 +21,36 @@ mysql -u root -p campus_ai_delivery < data.sql
 
 | 角色 | 登录账号 | 初始密码 | 说明 |
 | --- | --- | --- | --- |
-| 学生 | `20210001` | `123456` | 学号登录，含饮食档案（减脂、忌香菜花生） |
-| 商户 | `13900000001` | `123456` | 对应「第八食堂·二楼档口」 |
-| 骑手 | `13700000001` | `123456` | 工作状态为接单中 |
-| 管理员 | `admin` | `123456` | 超级管理员 |
+| 学生 | `20210001` | `Stu@Campus2026` | 学号登录，含饮食档案（减脂、忌香菜花生） |
+| 商户 | `13900000001` | `Mch@Campus2026` | 对应「第八食堂·二楼档口」 |
+| 骑手 | `13700000001` | `Rid@Campus2026` | 工作状态为接单中 |
+| 管理员 | `admin` | `Adm@Campus#2026` | 超级管理员 |
+
+> 这四个口令**仅用于本地开发与答辩演示**：四个角色各不相同（不用同一口令，避免一个账号泄露牵连其余角色）；
+> 口令在库中以 BCrypt 加盐哈希存储（`$2a$10$` 前缀、60 位），不存明文；
+> 正式部署必须删除演示账号、改用个人账号，并把口令放到环境变量或配置中心。
 
 `data.sql` 中 `password` 列为空，**不伪造哈希值**。密码在后端以 `dev` profile 启动时由
-`DevDataInitializer` 统一初始化为 `123456` 的 BCrypt 密文（启动日志会打印提示）。
+`DevDataInitializer` 按用户名分别初始化为上表口令的 BCrypt 密文（启动日志只打印条数，不打印口令明文）。
 如需手动生成密文：
 
 ```bash
 cd ../backend
-mvn -q compile exec:java -Dexec.mainClass=com.campus.delivery.common.util.PasswordGenerator
+mvn -q compile exec:java -Dexec.mainClass=com.campus.delivery.common.util.PasswordGenerator -Dexec.args="你的口令"
 ```
+
+### 已经建过库的本地环境怎么更新口令
+
+口令升级前就建过库的同学，`sys_user.password` 里还是旧口令的密文。执行一次
+`reset-demo-password.sql`（它只把这四个演示账号的密码清空），再重启后端，
+`DevDataInitializer` 会自动写入新口令的密文：
+
+```bash
+mysql -u root -p campus_ai_delivery < reset-demo-password.sql
+# 然后重启后端（profiles = dev,local），再用上表口令登录验证
+```
+
+不要为了改口令重跑 `schema.sql` —— 它开头是 `DROP DATABASE`，会清空整库。
 
 ## 四、表清单（35 张，按数据责任域分组）
 

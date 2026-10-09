@@ -10,7 +10,8 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/campus_ai_delivery?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: 123456
+    # 占位值，不是任何环境的真实口令；本地真实口令写在 application-local.yml
+    password: CHANGE_ME
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
@@ -41,7 +42,7 @@ logging:
   level:
     com.campus.delivery: debug
 
-# 开发环境启动时把演示账号密码初始化为 123456（见 DevDataInitializer）
+# 开发环境启动时把演示账号密码初始化为预设口令（四个角色各不相同，见 DevDataInitializer 与 database/README.md）
 campus:
   dev:
     init-demo-password: true
