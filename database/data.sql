@@ -5,8 +5,9 @@
 --  【重要】演示账号密码说明
 --    密码列在下方统一写入占位符，不在此处伪造哈希值。
 --    后端以 dev profile 启动时，DevDataInitializer 会把密码为空的演示账号
---    统一初始化为 123456 的 BCrypt 密文，并打印到启动日志。
---    如需手动生成密文：运行 backend 中 common/util/PasswordGenerator 的 main 方法。
+--    初始化为各角色预设口令的 BCrypt 密文（四个角色口令各不相同，见 database/README.md）。
+--    如需手动生成密文：运行 backend 中 common/util/PasswordGenerator 的 main 方法，
+--    把明文口令作为参数传入（不传参数会打印用法提示）。
 -- =====================================================================
 
 USE campus_ai_delivery;
