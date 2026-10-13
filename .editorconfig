@@ -1,0 +1,34 @@
+# ============================================================
+# 智能 AI 校园外卖平台 · 全组统一编辑器基础规范
+# ------------------------------------------------------------
+# 谁读它：
+#   VS Code（前端） —— 需装 EditorConfig for VS Code 扩展
+#   IntelliJ IDEA（后端） —— 内置支持，需在 设置 → 编辑器 → 代码样式 里
+#                            勾选「启用 EditorConfig 支持」
+# 为什么要有它：这是"机器能读的规范"，和规范文档里写的条文一一对应。
+#   改这里的值 = 改规范条文，两个编辑器的行为一起变。
+# ============================================================
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# 后端 Java 与 Maven 的 XML：4 格缩进（Java 社区惯例）
+[*.{java,xml}]
+indent_size = 4
+
+# Markdown 保留行尾空格（两个空格在 Markdown 里表示换行）
+[*.md]
+trim_trailing_whitespace = false
+
+# ------------------------------------------------------------
+# 关于换行符：统一 LF，与仓库根 .gitattributes 里的
+#   * text=auto eol=lf
+# 保持一致（git 提交时会自动把 CRLF 规范成 LF，
+# 所以不会因此产生"整文件被改"的假差异）。
+# ------------------------------------------------------------
