@@ -11,7 +11,13 @@ target/
 *.iml
 *.ipr
 *.iws
-.vscode/
+# 忽略 .vscode 下的个人配置，但保留 settings.json（工作区设置）
+# 和 extensions.json（扩展推荐）供全组共用
+# 注意：必须写成 .vscode/* 才能放行里面的文件——如果写成 .vscode/，
+# git 不会进入这个目录，下面的 ! 例外规则会失效
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 *.swp
 
 # ---------- Node / Vue ----------

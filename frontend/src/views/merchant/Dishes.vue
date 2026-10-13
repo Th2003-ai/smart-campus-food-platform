@@ -4,23 +4,11 @@
       <template #header>
         <div class="header">
           <div class="filters">
-            <el-select
-              v-model="query.categoryId"
-              placeholder="全部分类"
-              clearable
-              style="width: 140px"
-              @change="load"
-            >
+            <el-select v-model="query.categoryId" placeholder="全部分类" clearable style="width: 140px" @change="load">
               <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
             </el-select>
 
-            <el-select
-              v-model="query.status"
-              placeholder="全部状态"
-              clearable
-              style="width: 130px"
-              @change="load"
-            >
+            <el-select v-model="query.status" placeholder="全部状态" clearable style="width: 130px" @change="load">
               <el-option label="上架中" :value="1" />
               <el-option label="已下架" :value="0" />
             </el-select>
@@ -79,7 +67,8 @@
       </el-table>
 
       <p class="text-muted hint">
-        提示：库存改成 0 会自动下架；「标签」和「主要食材」两栏直接影响学生端的 AI 点餐、语义搜索和忌口过滤效果，建议每条菜都填。
+        提示：库存改成 0 会自动下架；「标签」和「主要食材」两栏直接影响学生端的 AI
+        点餐、语义搜索和忌口过滤效果，建议每条菜都填。
       </p>
     </el-card>
 
