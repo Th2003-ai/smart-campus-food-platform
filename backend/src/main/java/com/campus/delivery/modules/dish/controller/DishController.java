@@ -2,7 +2,6 @@ package com.campus.delivery.modules.dish.controller;
 
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.dish.entity.Dish;
-import com.campus.delivery.modules.dish.entity.DishCategory;
 import com.campus.delivery.modules.dish.service.DishService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
