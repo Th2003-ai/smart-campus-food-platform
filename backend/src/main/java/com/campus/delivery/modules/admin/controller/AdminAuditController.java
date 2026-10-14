@@ -3,7 +3,6 @@ package com.campus.delivery.modules.admin.controller;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.security.RequiresRole;
 import com.campus.delivery.security.RoleEnum;
-import com.campus.delivery.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
