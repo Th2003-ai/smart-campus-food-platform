@@ -9,7 +9,7 @@
           <el-input v-model="form.username" placeholder="学号 / 手机号 / admin" clearable />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input v-model="form.password" type="password" placeholder="初始密码 123456" show-password />
+          <el-input v-model="form.password" type="password" placeholder="演示账号密码见 database/README.md" show-password />
         </el-form-item>
         <el-form-item label="角色" prop="role">
           <el-radio-group v-model="form.role">

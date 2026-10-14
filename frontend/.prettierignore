@@ -1,0 +1,7 @@
+# 由工具生成、不需要按规范重排的内容
+node_modules
+dist
+dist-ssr
+coverage
+package-lock.json
+*.min.js
