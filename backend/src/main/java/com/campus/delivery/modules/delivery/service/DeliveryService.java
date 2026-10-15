@@ -13,15 +13,18 @@ import com.campus.delivery.modules.delivery.mapper.GrabLogMapper;
 import com.campus.delivery.modules.delivery.mapper.RiderMapper;
 import com.campus.delivery.modules.order.entity.Order;
 import com.campus.delivery.modules.order.service.OrderService;
+import com.campus.delivery.modules.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -53,6 +56,7 @@ public class DeliveryService {
     private final GrabLogMapper grabLogMapper;
     private final DeliveryRecordMapper deliveryRecordMapper;
     private final OrderService orderService;
+    private final UserService userService;
     private final RedisTemplate<String, Object> redisTemplate;
 
     /** 订单大厅：可抢订单列表 */
@@ -206,5 +210,88 @@ public class DeliveryService {
         } catch (Exception e) {
             log.warn("抢单日志写入失败: {}", e.getMessage());
         }
+    }
+
+    // ==================================================================
+    // 管理端：骑手审核与封禁（供 AdminAuditService 调用）
+    // ==================================================================
+
+    /**
+     * 审核骑手资质。
+     *
+     * <p>约束：只有「待审核」可审核；驳回必须填写原因。
+     * 通过后骑手才能进入抢单流程（{@link #requireRider} 会校验 audit_status）。
+     *
+     * @param riderId 骑手ID（rider.id，不是 sys_user.id）
+     * @param pass    true 通过，false 驳回
+     * @param remark  审核意见，驳回时必填
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void auditRider(String riderId, boolean pass, String remark) {
+        Rider rider = riderMapper.selectById(riderId);
+        if (rider == null) {
+            throw new BusinessException(CODE_RIDER_NOT_FOUND, "骑手信息不存在");
+        }
+        if (!CommonEnums.AuditStatus.WAITING.getCode().equals(rider.getAuditStatus())) {
+            throw new BusinessException(40006, "该骑手已审核（当前状态："
+                    + auditStatusText(rider.getAuditStatus()) + "），不可重复审核");
+        }
+        if (!pass && !StringUtils.hasText(remark)) {
+            throw new BusinessException(40007, "驳回骑手必须填写驳回原因");
+        }
+        rider.setAuditStatus(pass
+                ? CommonEnums.AuditStatus.PASSED.getCode()
+                : CommonEnums.AuditStatus.REJECTED.getCode());
+        rider.setAuditRemark(remark);
+        riderMapper.updateById(rider);
+    }
+
+    /**
+     * 封禁 / 解封骑手。
+     *
+     * <p>封禁语义落在 {@code sys_user.status}（0禁用）：登录入口会直接拦截，
+     * 因此封禁后骑手既无法登录也无法抢单。rider 表本身没有封禁字段
+     * （见 database/schema.sql），故不新增列，以账号状态为唯一事实来源。
+     *
+     * <p>封禁时若骑手处于「接单中」，一并切回「休息中」，避免前端仍显示可接单。
+     *
+     * @param riderId 骑手ID
+     * @param ban     true 封禁，false 解封
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void banRider(String riderId, boolean ban) {
+        // 注意：这里不能复用 requireRider —— 那个方法会因「资质未通过」抛异常，
+        // 而管理端恰恰需要对未通过审核的骑手执行封禁。
+        Rider rider = riderMapper.selectById(riderId);
+        if (rider == null) {
+            throw new BusinessException(CODE_RIDER_NOT_FOUND, "骑手信息不存在");
+        }
+        userService.updateAccountStatus(rider.getUserId(), ban ? 0 : 1);
+        if (ban && CommonEnums.WorkStatus.ACCEPTING.getCode().equals(rider.getWorkStatus())) {
+            rider.setWorkStatus(CommonEnums.WorkStatus.RESTING.getCode());
+            riderMapper.updateById(rider);
+        }
+    }
+
+    /**
+     * 管理端：骑手审核列表（含账号状态，供管理端判断是否已封禁）。
+     *
+     * @param auditStatus 审核状态过滤，null 表示全部
+     */
+    public List<Rider> listRidersForAudit(Integer auditStatus) {
+        return riderMapper.selectList(new LambdaQueryWrapper<Rider>()
+                .eq(auditStatus != null, Rider::getAuditStatus, auditStatus)
+                .orderByAsc(Rider::getAuditStatus)
+                .orderByDesc(Rider::getCreateTime));
+    }
+
+    private String auditStatusText(Integer status) {
+        if (CommonEnums.AuditStatus.PASSED.getCode().equals(status)) {
+            return "已通过";
+        }
+        if (CommonEnums.AuditStatus.REJECTED.getCode().equals(status)) {
+            return "已驳回";
+        }
+        return "待审核";
     }
 }

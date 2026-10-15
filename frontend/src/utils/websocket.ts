@@ -18,6 +18,24 @@ export type MessageHandler = (data: any) => void
 const RECONNECT_DELAY = 3000
 const MAX_RECONNECT = 5
 
+/**
+ * 计算 WebSocket 端点。
+ *
+ * <p>默认「跟着页面地址走」：用当前页面协议与 host 拼接，
+ * 因此本机用 localhost、别人用 http://192.168.x.x:5173 访问时都能连上，
+ * 不需要为每台机器改配置。开发态由 vite.config.ts 的 /api 代理转发 ws 升级。
+ *
+ * <p>仅当需要跨域连接（前端与后端不同源）时，才用 VITE_WS_URL 显式指定。
+ */
+function resolveWsUrl(): string {
+  const configured = import.meta.env.VITE_WS_URL
+  if (configured) {
+    return configured
+  }
+  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${scheme}//${window.location.host}/api/ws/order`
+}
+
 export class OrderSocket {
   private ws: WebSocket | null = null
   private handlers = new Map<string, MessageHandler[]>()
@@ -29,8 +47,7 @@ export class OrderSocket {
     if (!token) {
       return
     }
-    const base = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/api/ws/order'
-    this.ws = new WebSocket(`${base}?token=${token}`)
+    this.ws = new WebSocket(`${resolveWsUrl()}?token=${token}`)
 
     this.ws.onopen = () => {
       this.reconnectCount = 0

@@ -10,12 +10,7 @@
         <el-menu-item index="/rider/profile">个人中心</el-menu-item>
       </el-menu>
       <div class="actions">
-        <el-switch
-          v-model="online"
-          active-text="在线"
-          inactive-text="离线"
-          @change="onWorkStatusChange"
-        />
+        <el-switch v-model="online" active-text="在线" inactive-text="离线" @change="onWorkStatusChange" />
         <el-button text @click="onLogout">退出</el-button>
       </div>
     </el-header>

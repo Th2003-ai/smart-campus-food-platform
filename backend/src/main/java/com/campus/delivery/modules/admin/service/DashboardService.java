@@ -25,11 +25,17 @@ public class DashboardService {
     private final JdbcTemplate jdbcTemplate;
     private final OrderService orderService;
 
-    /** 核心指标 */
+    /**
+     * 核心指标
+     *
+     * <p>注意：{@code orders} 表没有 {@code deleted} 字段（软删除只用于
+     * sys_user / user_address / shop / dish），订单的取消语义由 order_status = 5 表达，
+     * 因此针对 orders 的统计一律不加 deleted 条件。
+     */
     public Map<String, Object> overview() {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("orderCount", queryLong("SELECT COUNT(*) FROM orders WHERE deleted = 0"));
-        result.put("salesAmount", queryDecimal("SELECT IFNULL(SUM(total_amount), 0) FROM orders WHERE deleted = 0 AND order_status = 4"));
+        result.put("orderCount", queryLong("SELECT COUNT(*) FROM orders"));
+        result.put("salesAmount", queryDecimal("SELECT IFNULL(SUM(total_amount), 0) FROM orders WHERE order_status = 4"));
         result.put("studentCount", queryLong("SELECT COUNT(*) FROM student"));
         result.put("merchantCount", queryLong("SELECT COUNT(*) FROM merchant WHERE audit_status = 1"));
         result.put("shopCount", queryLong("SELECT COUNT(*) FROM shop WHERE deleted = 0"));
@@ -66,7 +72,7 @@ public class DashboardService {
         return jdbcTemplate.queryForList(
                 "SELECT sc.name AS categoryName, COUNT(o.id) AS orderCount "
                         + "FROM shop s LEFT JOIN shop_category sc ON s.category_id = sc.id "
-                        + "LEFT JOIN orders o ON o.shop_id = s.id AND o.deleted = 0 "
+                        + "LEFT JOIN orders o ON o.shop_id = s.id "
                         + "GROUP BY sc.name ORDER BY orderCount DESC");
     }
 
@@ -74,7 +80,7 @@ public class DashboardService {
     public List<Map<String, Object>> hourDistribution() {
         return jdbcTemplate.queryForList(
                 "SELECT HOUR(create_time) AS hourOfDay, COUNT(*) AS orderCount "
-                        + "FROM orders WHERE deleted = 0 GROUP BY HOUR(create_time) ORDER BY hourOfDay");
+                        + "FROM orders GROUP BY HOUR(create_time) ORDER BY hourOfDay");
     }
 
     /** 平台用户反馈热词（AI 提取的评价标签） */

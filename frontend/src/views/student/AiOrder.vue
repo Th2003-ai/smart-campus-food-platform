@@ -2,12 +2,7 @@
   <div class="page">
     <el-card shadow="never">
       <template #header>AI 点餐 · 一句话点餐</template>
-      <el-input
-        v-model="message"
-        type="textarea"
-        :rows="3"
-        placeholder="例如：20 块以内、不辣、要有肉"
-      />
+      <el-input v-model="message" type="textarea" :rows="3" placeholder="例如：20 块以内、不辣、要有肉" />
       <div style="margin-top: 12px">
         <el-button type="primary" :loading="loading" @click="onSubmit">开始点餐</el-button>
         <span class="text-muted">AI 只从在售菜品中挑选，忌口与过敏原会被自动过滤</span>

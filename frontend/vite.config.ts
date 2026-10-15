@@ -15,10 +15,14 @@ export default defineConfig({
   server: {
     port: 5173,
     open: false,
+    // 监听所有网卡，便于同一局域网内用 http://<本机IP>:5173 访问演示
+    host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true
+        target: process.env.BACKEND_ORIGIN || 'http://localhost:8080',
+        changeOrigin: true,
+        // 允许 WebSocket 升级：订单实时通知走 /api/ws/order
+        ws: true
       }
     }
   },
