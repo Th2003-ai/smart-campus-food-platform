@@ -105,6 +105,14 @@
             <version>${easyexcel.version}</version>
         </dependency>
 
+        <!-- 配置项加密：数据库口令等以 ENC(密文) 形式存放，密钥由环境变量注入
+             用法见 docs/05-换机部署与配置.md 与 common/util/ConfigEncryptor -->
+        <dependency>
+            <groupId>com.github.ulisesbocchio</groupId>
+            <artifactId>jasypt-spring-boot-starter</artifactId>
+            <version>3.0.5</version>
+        </dependency>
+
         <!-- 工具 -->
         <dependency>
             <groupId>org.projectlombok</groupId>
