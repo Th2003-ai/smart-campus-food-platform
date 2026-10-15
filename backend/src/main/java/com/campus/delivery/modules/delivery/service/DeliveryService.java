@@ -6,7 +6,9 @@ import com.campus.delivery.common.constant.RedisKeys;
 import com.campus.delivery.common.enums.CommonEnums;
 import com.campus.delivery.common.enums.OrderStatus;
 import com.campus.delivery.common.exception.BusinessException;
+import com.campus.delivery.modules.delivery.entity.DeliveryRecord;
 import com.campus.delivery.modules.delivery.entity.Rider;
+import com.campus.delivery.modules.delivery.mapper.DeliveryRecordMapper;
 import com.campus.delivery.modules.delivery.mapper.GrabLogMapper;
 import com.campus.delivery.modules.delivery.mapper.RiderMapper;
 import com.campus.delivery.modules.order.entity.Order;
@@ -18,6 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -28,8 +32,9 @@ import java.util.concurrent.TimeUnit;
  * <p>抢单并发控制（需求文档 5.6.2 难点二）：
  * <ol>
  *   <li>Redis 分布式锁 {@code lock:order:grab:{orderId}} 保证同一订单同一时刻只有一个骑手进入；</li>
- *   <li>数据库条件更新（{@code rider_id IS NULL}）做最终一致性兜底；</li>
- *   <li>每次抢单尝试写入 {@code grab_log}，失败原因可追溯。</li>
+ *   <li>订单表 version 乐观锁做最终一致性兜底，更新行数为 0 即判定抢单失败；</li>
+ *   <li>每次抢单尝试写入 {@code grab_log}，失败原因可追溯；</li>
+ *   <li>抢单成功写入 {@code delivery_record}，取餐/送达更新状态与时间，作为收入统计依据。</li>
  * </ol>
  */
 @Slf4j
@@ -46,6 +51,7 @@ public class DeliveryService {
 
     private final RiderMapper riderMapper;
     private final GrabLogMapper grabLogMapper;
+    private final DeliveryRecordMapper deliveryRecordMapper;
     private final OrderService orderService;
     private final RedisTemplate<String, Object> redisTemplate;
 
@@ -79,13 +85,17 @@ public class DeliveryService {
                         "您有配送中的订单，请先完成（上限 " + rider.getMaxDelivering() + " 单）");
             }
 
-            // 绑定骑手：内部会再次校验订单状态与 rider_id 是否为空
+            // 绑定骑手：内部用乐观锁校验订单状态与 rider_id 是否为空
             Order order = orderService.bindRider(orderId, riderId);
 
             int rows = riderMapper.increaseDelivering(riderId);
             if (rows == 0) {
                 throw new BusinessException(CODE_LIMIT_EXCEEDED, "超出接单上限，抢单失败");
             }
+
+            // 生成配送记录（status=0 待取餐），order_id 唯一索引兜底
+            createDeliveryRecord(order, riderId);
+
             recordGrabLog(orderId, riderId, 1, null);
             log.info("抢单成功: riderId={}, orderId={}", riderId, orderId);
             return order;
@@ -98,19 +108,36 @@ public class DeliveryService {
         }
     }
 
-    /** 确认取餐：订单进入配送中 */
+    /** 确认取餐：订单进入配送中，更新配送记录 */
     @Transactional(rollbackFor = Exception.class)
     public Order pickup(String riderId, String orderId) {
-        return orderService.riderTransit(orderId, riderId, OrderStatus.DELIVERING);
+        Order order = orderService.riderTransit(orderId, riderId, OrderStatus.DELIVERING);
+        DeliveryRecord record = getDeliveryRecord(orderId);
+        if (record != null) {
+            record.setStatus(1); // 1配送中
+            record.setPickupTime(LocalDateTime.now());
+            deliveryRecordMapper.updateById(record);
+        }
+        return order;
     }
 
-    /** 确认送达：订单完成，骑手配送中数量 -1、收入累加 */
+    /** 确认送达：订单完成，骑手配送中数量 -1、收入累加，更新配送记录 */
     @Transactional(rollbackFor = Exception.class)
     public Order deliver(String riderId, String orderId) {
         Order order = orderService.riderTransit(orderId, riderId, OrderStatus.FINISHED);
         riderMapper.decreaseDelivering(riderId, order.getDeliveryFee() == null
                 ? BigDecimal.ZERO : order.getDeliveryFee());
-        // TODO(成员4)：更新 delivery_record（取餐/送达时间、配送耗时、配送费）
+
+        DeliveryRecord record = getDeliveryRecord(orderId);
+        if (record != null) {
+            LocalDateTime finishTime = LocalDateTime.now();
+            record.setStatus(2); // 2已送达
+            record.setFinishTime(finishTime);
+            if (record.getGrabTime() != null) {
+                record.setDurationMin((int) ChronoUnit.MINUTES.between(record.getGrabTime(), finishTime));
+            }
+            deliveryRecordMapper.updateById(record);
+        }
         return order;
     }
 
@@ -140,6 +167,25 @@ public class DeliveryService {
     public Rider getByUserId(String userId) {
         return riderMapper.selectOne(new LambdaQueryWrapper<Rider>()
                 .eq(Rider::getUserId, userId).last("LIMIT 1"));
+    }
+
+    /** 抢单成功：创建配送记录（status=0 待取餐） */
+    private void createDeliveryRecord(Order order, String riderId) {
+        DeliveryRecord record = new DeliveryRecord();
+        record.setOrderId(order.getId());
+        record.setRiderId(riderId);
+        record.setStatus(0); // 0待取餐
+        record.setGrabTime(LocalDateTime.now());
+        record.setDeliveryFee(order.getDeliveryFee() == null
+                ? BigDecimal.ZERO : order.getDeliveryFee());
+        deliveryRecordMapper.insert(record);
+    }
+
+    /** 按订单号查配送记录 */
+    private DeliveryRecord getDeliveryRecord(String orderId) {
+        return deliveryRecordMapper.selectOne(new LambdaQueryWrapper<DeliveryRecord>()
+                .eq(DeliveryRecord::getOrderId, orderId)
+                .last("LIMIT 1"));
     }
 
     private Rider requireRider(String riderId) {
