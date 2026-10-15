@@ -4,11 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.constant.RedisKeys;
+import com.campus.delivery.common.enums.CommonEnums;
 import com.campus.delivery.common.exception.BusinessException;
 import com.campus.delivery.modules.shop.entity.Merchant;
 import com.campus.delivery.modules.shop.entity.Shop;
 import com.campus.delivery.modules.shop.mapper.MerchantMapper;
 import com.campus.delivery.modules.shop.mapper.ShopMapper;
+import com.campus.delivery.modules.user.service.UserService;
 import com.campus.delivery.security.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -16,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -33,6 +37,7 @@ public class ShopService {
 
     private final ShopMapper shopMapper;
     private final MerchantMapper merchantMapper;
+    private final UserService userService;
     private final RedisTemplate<String, Object> redisTemplate;
 
     /** 店铺列表（学生端首页） */
@@ -158,5 +163,113 @@ public class ShopService {
 
     private void evictCache(String shopId) {
         redisTemplate.delete(RedisKeys.SHOP_DETAIL + shopId);
+    }
+
+    // ==================================================================
+    // 管理端：商户审核与店铺封禁（供 AdminAuditService 调用）
+    // ==================================================================
+
+    /**
+     * 审核商户资质。
+     *
+     * <p>约束：只有「待审核」状态可审核，防止重复审核覆盖 audit_time / audit_by
+     * 使审计链失效；驳回必须填写原因，避免静默驳回。
+     *
+     * <p>审核通过/驳回只改 merchant 表；是否需要同时禁用账号由调用方决定
+     * （见 AdminAuditService），本方法保持单一职责。
+     *
+     * @param merchantId  商户ID（merchant.id，不是 sys_user.id）
+     * @param pass        true 通过，false 驳回
+     * @param remark      审核意见，驳回时必填
+     * @param adminUserId 审核人（管理员 sys_user.id）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void auditMerchant(String merchantId, boolean pass, String remark, String adminUserId) {
+        Merchant merchant = merchantMapper.selectById(merchantId);
+        if (merchant == null) {
+            throw new BusinessException(20005, "商户不存在");
+        }
+        if (!CommonEnums.AuditStatus.WAITING.getCode().equals(merchant.getAuditStatus())) {
+            throw new BusinessException(20006, "该商户已审核（当前状态："
+                    + auditStatusText(merchant.getAuditStatus()) + "），不可重复审核");
+        }
+        if (!pass && !StringUtils.hasText(remark)) {
+            throw new BusinessException(20007, "驳回商户必须填写驳回原因");
+        }
+        merchant.setAuditStatus(pass
+                ? CommonEnums.AuditStatus.PASSED.getCode()
+                : CommonEnums.AuditStatus.REJECTED.getCode());
+        merchant.setAuditRemark(remark);
+        merchant.setAuditBy(adminUserId);
+        merchant.setAuditTime(LocalDateTime.now());
+        merchantMapper.updateById(merchant);
+    }
+
+    /**
+     * 封禁 / 解封店铺。
+     *
+     * <p>封禁时同时把营业状态置为「休息中」：否则会出现「已封禁但前台显示营业中」
+     * 的矛盾状态。封禁后 {@link #pageShops} 会把该店铺从学生端列表滤掉。
+     *
+     * @param shopId 店铺ID
+     * @param ban    true 封禁，false 解封
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateBanStatus(String shopId, boolean ban) {
+        Shop shop = shopMapper.selectById(shopId);
+        if (shop == null) {
+            throw new BusinessException(20001, "店铺不存在");
+        }
+        shop.setBanStatus(ban ? 1 : 0);
+        if (ban) {
+            shop.setBusinessStatus(0);
+        }
+        shopMapper.updateById(shop);
+        evictCache(shopId);
+    }
+
+    /**
+     * 管理端：商户审核列表。
+     *
+     * <p>不做分页（校园场景待审商户量级很小），按「待审核优先 + 提交时间倒序」排列，
+     * 便于管理端第一屏就看到要处理的记录。
+     *
+     * @param auditStatus 审核状态过滤，null 表示全部
+     */
+    public List<Merchant> listMerchantsForAudit(Integer auditStatus) {
+        return merchantMapper.selectList(new LambdaQueryWrapper<Merchant>()
+                .eq(auditStatus != null, Merchant::getAuditStatus, auditStatus)
+                .orderByAsc(Merchant::getAuditStatus)
+                .orderByDesc(Merchant::getCreateTime));
+    }
+
+    /**
+     * 管理端：店铺列表（含已封禁）。
+     *
+     * <p>必须与 {@link #pageShops} 区分：后者会过滤 ban_status = 0，
+     * 管理端若也用它，店铺一旦封禁就再也查不到，无法解封。
+     *
+     * @param banStatus 封禁状态过滤，null 表示全部
+     */
+    public List<Shop> listShopsForAudit(Integer banStatus) {
+        return shopMapper.selectList(new LambdaQueryWrapper<Shop>()
+                .eq(banStatus != null, Shop::getBanStatus, banStatus)
+                .orderByDesc(Shop::getCreateTime));
+    }
+
+    /** 商户的登录账号ID；商户不存在返回 null（供管理端审核后处理账号状态） */
+    public String merchantUserId(String merchantId) {
+        Merchant merchant = merchantMapper.selectById(merchantId);
+        return merchant == null ? null : merchant.getUserId();
+    }
+
+    private String auditStatusText(Integer status) {
+        if (CommonEnums.AuditStatus.PASSED.getCode().equals(status)) {
+            return "已通过";
+        }
+        if (CommonEnums.AuditStatus.REJECTED.getCode().equals(status)) {
+            return "已驳回";
+        }
+        return "待审核";
     }
 }

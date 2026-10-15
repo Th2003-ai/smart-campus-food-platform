@@ -18,7 +18,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 用户与画像服务。主责：成员1。
@@ -88,6 +91,47 @@ public class UserService {
         profile.setWeightKg(dto.getWeightKg());
         dietProfileMapper.updateById(profile);
         return profile;
+    }
+
+    // ------------------------------------------------------------------
+    // 账号状态（供管理端封禁/解封，以及审核列表展示）
+    // ------------------------------------------------------------------
+
+    /**
+     * 账号状态：0禁用 1正常；账号不存在返回 null。
+     *
+     * <p>封禁语义统一落在 {@code sys_user.status} 上：登录入口
+     * （{@code AuthService.login}）已经拦截 status = 0，因此置 0 即可阻止该账号继续登录。
+     */
+    public Integer getAccountStatus(String userId) {
+        SysUser user = sysUserMapper.selectById(userId);
+        return user == null ? null : user.getStatus();
+    }
+
+    /** 批量查账号状态：userId -> status，避免审核列表逐条查询 */
+    public Map<String, Integer> mapAccountStatus(Collection<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        List<SysUser> users = sysUserMapper.selectBatchIds(userIds);
+        Map<String, Integer> result = new HashMap<>(users.size());
+        for (SysUser user : users) {
+            result.put(user.getId(), user.getStatus());
+        }
+        return result;
+    }
+
+    /** 启用/禁用账号：0禁用 1正常。用于管理端封禁与解封 */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateAccountStatus(String userId, Integer status) {
+        SysUser exists = sysUserMapper.selectById(userId);
+        if (exists == null) {
+            throw new BusinessException(10005, "用户不存在");
+        }
+        SysUser update = new SysUser();
+        update.setId(userId);
+        update.setStatus(status);
+        sysUserMapper.updateById(update);
     }
 
     // ------------------------------------------------------------------

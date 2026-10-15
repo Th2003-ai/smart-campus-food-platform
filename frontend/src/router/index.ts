@@ -214,6 +214,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '骑手审核' }
       },
       {
+        path: 'shops',
+        name: 'AdminShops',
+        component: () => import('@/views/admin/Shops.vue'),
+        meta: { title: '店铺管理' }
+      },
+      {
         path: 'knowledge',
         name: 'AdminKnowledge',
         component: () => import('@/views/admin/Knowledge.vue'),
