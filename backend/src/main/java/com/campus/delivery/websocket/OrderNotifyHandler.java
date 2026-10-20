@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @Component
+@lombok.RequiredArgsConstructor
 public class OrderNotifyHandler extends TextWebSocketHandler {
 
     /** userId -> 该用户的全部连接（同一账号可能多端登录） */
@@ -40,6 +41,7 @@ public class OrderNotifyHandler extends TextWebSocketHandler {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private final com.campus.delivery.modules.delivery.service.RiderOnlineService riderOnlineService;
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String userId = attr(session, "userId");
@@ -50,19 +52,29 @@ public class OrderNotifyHandler extends TextWebSocketHandler {
         }
         USER_SESSIONS.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(session);
         ROLE_SESSIONS.computeIfAbsent(role, k -> ConcurrentHashMap.newKeySet()).add(session);
+        // 骑手连接建立即在 Redis 打上在线标记（TTL 即离线判定窗口）
+        if ("RIDER".equalsIgnoreCase(role)) {
+            riderOnlineService.markOnlineByUserId(userId);
+        }
         log.info("WebSocket 连接建立: userId={}, role={}, 在线连接数={}", userId, role, USER_SESSIONS.size());
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        updateRiderOnlineOnClose(session);
         removeSession(session);
         log.info("WebSocket 连接关闭: sessionId={}, status={}", session.getId(), status);
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
-        // 客户端心跳：回复 pong，用于前端探活与后端在线状态维护
+        // 客户端心跳：回复 pong，并用心跳续期骑手在线状态
         if ("ping".equals(message.getPayload())) {
+            String userId = attr(session, "userId");
+            String role = attr(session, "role");
+            if ("RIDER".equalsIgnoreCase(role) && userId != null) {
+                riderOnlineService.markOnlineByUserId(userId);
+            }
             sendText(session, "{\"type\":\"PONG\"}");
         }
     }
@@ -70,7 +82,17 @@ public class OrderNotifyHandler extends TextWebSocketHandler {
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) {
         log.warn("WebSocket 传输异常: sessionId={}, msg={}", session.getId(), exception.getMessage());
+        updateRiderOnlineOnClose(session);
         removeSession(session);
+    }
+
+    /** 断线时清除骑手在线标记，避免「已离线仍显示在线」 */
+    private void updateRiderOnlineOnClose(WebSocketSession session) {
+        String userId = attr(session, "userId");
+        String role = attr(session, "role");
+        if ("RIDER".equalsIgnoreCase(role) && userId != null) {
+            riderOnlineService.markOfflineByUserId(userId);
+        }
     }
 
     // ------------------------------------------------------------------

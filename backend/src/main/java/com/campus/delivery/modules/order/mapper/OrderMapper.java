@@ -33,4 +33,24 @@ public interface OrderMapper extends BaseMapper<Order> {
             + "AND create_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY) "
             + "GROUP BY DATE(create_time) ORDER BY stat_date")
     List<Map<String, Object>> statDailyTrend(@Param("days") int days);
+
+    /**
+     * 商户端「经营概览」：本店订单聚合指标。
+     *
+     * <p>返回 key 全部是 SQL 别名（驼峰），因为 Map 结果不会走
+     * {@code map-underscore-to-camel-case}（该配置只作用于实体映射）。
+     *
+     * @param shopId 店铺ID（由 Service 从登录态解析，不接受前端传入）
+     */
+    @Select("SELECT COUNT(*) AS totalOrders, "
+            + "IFNULL(SUM(CASE WHEN DATE(create_time) = CURDATE() THEN 1 ELSE 0 END), 0) AS todayOrders, "
+            + "IFNULL(SUM(CASE WHEN DATE(create_time) = CURDATE() THEN total_amount ELSE 0 END), 0) AS todaySales, "
+            + "IFNULL(SUM(CASE WHEN order_status = 0 THEN 1 ELSE 0 END), 0) AS pendingCount, "
+            + "IFNULL(SUM(CASE WHEN order_status = 1 THEN 1 ELSE 0 END), 0) AS preparingCount, "
+            + "IFNULL(SUM(CASE WHEN order_status = 2 THEN 1 ELSE 0 END), 0) AS pickingCount, "
+            + "IFNULL(SUM(CASE WHEN order_status = 3 THEN 1 ELSE 0 END), 0) AS deliveringCount, "
+            + "IFNULL(SUM(CASE WHEN order_status = 4 THEN 1 ELSE 0 END), 0) AS finishedCount, "
+            + "IFNULL(SUM(CASE WHEN order_status = 4 THEN total_amount ELSE 0 END), 0) AS totalSales "
+            + "FROM orders WHERE shop_id = #{shopId}")
+    Map<String, Object> statShopOverview(@Param("shopId") String shopId);
 }

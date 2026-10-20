@@ -16,11 +16,17 @@ public final class RedisKeys {
     /** 角色权限缓存：auth:perm:{role} */
     public static final String ROLE_PERMISSION = "auth:perm:";
 
-    /** 热门店铺缓存（有序集合） */
+    /** 热门店铺缓存（有序集合，score 为月销量） */
     public static final String HOT_SHOP = "cache:shop:hot";
 
-    /** 热门菜品缓存（有序集合） */
+    /** 热门菜品缓存（有序集合，score 为月销量） */
     public static final String HOT_DISH = "cache:dish:hot";
+
+    /** 热门店铺榜单明细（List，与 HOT_SHOP 配套，省去回表查详情） */
+    public static final String HOT_SHOP_LIST = "cache:shop:hot:list";
+
+    /** 热门菜品榜单明细（List，与 HOT_DISH 配套，省去回表查详情） */
+    public static final String HOT_DISH_LIST = "cache:dish:hot:list";
 
     /** 菜品详情缓存：cache:dish:detail:{dishId} */
     public static final String DISH_DETAIL = "cache:dish:detail:";
@@ -33,6 +39,13 @@ public final class RedisKeys {
 
     /** 抢单分布式锁：lock:order:grab:{orderId} */
     public static final String LOCK_ORDER_GRAB = "lock:order:grab:";
+
+    /**
+     * 菜品详情回源重建锁：lock:dish:cache:{dishId}
+     *
+     * <p>用于「缓存击穿」防护：热点 key 过期瞬间只允许一个线程回源查库并重建缓存。
+     */
+    public static final String LOCK_DISH_CACHE = "lock:dish:cache:";
 
     /** 下单扣库存分布式锁：lock:dish:stock:{dishId} */
     public static final String LOCK_DISH_STOCK = "lock:dish:stock:";

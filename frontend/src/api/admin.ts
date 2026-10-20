@@ -1,4 +1,4 @@
-import { del, get, post } from '@/utils/request'
+import { del, get, post, put } from '@/utils/request'
 import type { PageResult } from '@/utils/request'
 
 export interface Knowledge {
@@ -8,6 +8,8 @@ export interface Knowledge {
   answer: string
   keywords?: string
   hitCount?: number
+  /** 0 停用 1 启用 */
+  status?: number
 }
 
 export interface Ticket {
@@ -148,6 +150,11 @@ export function listTickets(params?: { status?: number; pageNum?: number; pageSi
   return get<PageResult<Ticket>>('/tickets', params)
 }
 
+/** 学生端：我的工单（查看客服处理进度） */
+export function listMyTickets() {
+  return get<Ticket[]>('/tickets/mine')
+}
+
 export function handleTicket(id: string, reply: string, close = false) {
   return post<void>(`/tickets/${id}/handle`, null, { params: { reply, close } })
 }
@@ -190,4 +197,22 @@ export function menuTree() {
 /** 菜单平铺列表 */
 export function menuList() {
   return get<MenuFlat[]>('/admin/menu/list')
+}
+
+/** 系统配置（sys_config 键值对） */
+export interface ConfigItem {
+  id?: string
+  configKey: string
+  configValue?: string
+  remark?: string
+  createTime?: string
+  updateTime?: string
+}
+
+export function listConfig() {
+  return get<ConfigItem[]>('/admin/config')
+}
+
+export function saveConfig(data: ConfigItem) {
+  return put<void>('/admin/config', data)
 }

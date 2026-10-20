@@ -57,6 +57,7 @@ public class DeliveryService {
     private final DeliveryRecordMapper deliveryRecordMapper;
     private final OrderService orderService;
     private final UserService userService;
+    private final RiderOnlineService riderOnlineService;
     private final RedisTemplate<String, Object> redisTemplate;
 
     /** 订单大厅：可抢订单列表 */
@@ -154,7 +155,24 @@ public class DeliveryService {
     public Map<String, Object> income(String riderId) {
         Map<String, Object> stat = grabLogMapper.statIncome(riderId);
         stat.put("totalIncome", grabLogMapper.sumIncome(riderId));
+        stat.put("online", riderOnlineService.isOnline(riderId));
+        stat.put("lastHeartbeat", riderOnlineService.lastHeartbeat(riderId));
         return stat;
+    }
+
+    /**
+     * 骑手上线心跳（供非 WebSocket 场景使用，如接口轮询的客户端）。
+     *
+     * <p>续期 Redis 在线标记；超过 60 秒没有心跳即视为离线。
+     */
+    public void heartbeat(String riderId) {
+        Rider rider = requireRider(riderId);
+        riderOnlineService.markOnline(rider.getId());
+    }
+
+    /** 骑手是否在线（Redis 在线标记是否仍有效） */
+    public boolean isOnline(String riderId) {
+        return riderOnlineService.isOnline(riderId);
     }
 
     /** 切换工作状态：0休息中 1接单中 */
@@ -293,5 +311,38 @@ public class DeliveryService {
             return "已驳回";
         }
         return "待审核";
+    }
+
+    // ==================================================================
+    // 骑手注册（供 AuthService 调用）
+    // ==================================================================
+
+    /**
+     * 创建骑手档案。
+     *
+     * <p>审核状态置为 {@code 0 待审核}：注册后可以登录，但
+     * {@link #requireRider} 会拦住抢单等动作，直到管理员审核通过。
+     *
+     * <p>其余字段取「新手默认值」：休息中、配送中 0 单、上限 3 单、累计收入 0。
+     *
+     * @param userId        关联 sys_user.id
+     * @param realName      真实姓名（rider.real_name 非空）
+     * @param studentCardNo 学生证/工号（可空）
+     * @param vehicleType   配送车辆（可空）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void registerRiderProfile(String userId, String realName,
+                                     String studentCardNo, String vehicleType) {
+        Rider rider = new Rider();
+        rider.setUserId(userId);
+        rider.setRealName(realName);
+        rider.setStudentCardNo(studentCardNo);
+        rider.setVehicleType(vehicleType);
+        rider.setWorkStatus(CommonEnums.WorkStatus.RESTING.getCode());
+        rider.setDeliveringCount(0);
+        rider.setMaxDelivering(3);
+        rider.setTotalIncome(BigDecimal.ZERO);
+        rider.setAuditStatus(CommonEnums.AuditStatus.WAITING.getCode());
+        riderMapper.insert(rider);
     }
 }

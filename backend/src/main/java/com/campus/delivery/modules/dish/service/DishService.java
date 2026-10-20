@@ -8,6 +8,7 @@ import com.campus.delivery.modules.dish.entity.Dish;
 import com.campus.delivery.modules.dish.entity.DishCategory;
 import com.campus.delivery.modules.dish.mapper.DishCategoryMapper;
 import com.campus.delivery.modules.dish.mapper.DishMapper;
+import com.campus.delivery.modules.rank.service.HotRankService;
 import com.campus.delivery.modules.shop.service.ShopService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,10 +38,14 @@ public class DishService {
     private static final int CODE_DISH_OFF_SHELF = 20011;
     private static final int CODE_STOCK_NOT_ENOUGH = 20012;
 
+    /** 菜品详情缓存有效期（分钟） */
+    private static final long CACHE_MINUTES = 10L;
+
     private final DishMapper dishMapper;
     private final DishCategoryMapper dishCategoryMapper;
     private final ShopService shopService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final HotRankService hotRankService;
 
     // ------------------------------------------------------------------
     // 浏览与检索
@@ -55,18 +60,58 @@ public class DishService {
                 .orderByDesc(Dish::getMonthlySales));
     }
 
-    /** 菜品详情（热点缓存） */
+    /**
+     * 菜品详情（热点缓存）。
+     *
+     * <p>Cache-Aside：读时回填、写时删除（见 {@link #evictCache}）。
+     *
+     * <p>防缓存击穿：热点 key 过期瞬间若大量请求同时未命中，会一起压到数据库。
+     * 这里用 Redis 互斥锁（{@code SET NX EX}）保证同一菜品只有一个线程回源重建，
+     * 其余线程短暂等待后直接读新缓存；拿不到锁时也会兜底查库，不会死等。
+     */
     public Dish getDetail(String dishId) {
         String cacheKey = RedisKeys.DISH_DETAIL + dishId;
         Object cached = redisTemplate.opsForValue().get(cacheKey);
         if (cached instanceof Dish dish) {
             return dish;
         }
+
+        String lockKey = RedisKeys.LOCK_DISH_CACHE + dishId;
+        boolean locked = Boolean.TRUE.equals(redisTemplate.opsForValue()
+                .setIfAbsent(lockKey, "1", 5, TimeUnit.SECONDS));
+        if (locked) {
+            try {
+                // 双重检查：等锁期间可能已有其他线程完成回填
+                Object again = redisTemplate.opsForValue().get(cacheKey);
+                if (again instanceof Dish dish) {
+                    return dish;
+                }
+                Dish dish = dishMapper.selectById(dishId);
+                if (dish == null) {
+                    throw new BusinessException(CODE_DISH_NOT_FOUND, "菜品不存在");
+                }
+                redisTemplate.opsForValue().set(cacheKey, dish,
+                        jitterMinutes(CACHE_MINUTES), TimeUnit.MINUTES);
+                return dish;
+            } finally {
+                redisTemplate.delete(lockKey);
+            }
+        }
+
+        // 未抢到锁：稍等让持锁线程写完缓存，再读一次；仍未命中则直接查库兜底
+        try {
+            Thread.sleep(50L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        Object retry = redisTemplate.opsForValue().get(cacheKey);
+        if (retry instanceof Dish dish) {
+            return dish;
+        }
         Dish dish = dishMapper.selectById(dishId);
         if (dish == null) {
             throw new BusinessException(CODE_DISH_NOT_FOUND, "菜品不存在");
         }
-        redisTemplate.opsForValue().set(cacheKey, dish, 10, TimeUnit.MINUTES);
         return dish;
     }
 
@@ -146,6 +191,8 @@ public class DishService {
         dish.setStatus(status);
         dishMapper.updateById(dish);
         evictCache(dishId);
+        // 下架会改变榜单结果，同步失效热门榜单
+        hotRankService.touchDishRank(dish);
     }
 
     /** 调整库存；库存为 0 时自动下架（需求文档 5.2.2） */
@@ -161,6 +208,7 @@ public class DishService {
         }
         dishMapper.updateById(dish);
         evictCache(dishId);
+        hotRankService.touchDishRank(dish);
     }
 
     /** 菜品分类列表 */
@@ -218,5 +266,17 @@ public class DishService {
 
     private void evictCache(String dishId) {
         redisTemplate.delete(RedisKeys.DISH_DETAIL + dishId);
+    }
+
+    /**
+     * 给缓存 TTL 加随机抖动（±20%）。
+     *
+     * <p>固定 TTL 会让同一批写入的 key 集中过期，形成缓存雪崩；
+     * 抖动把过期时间打散，代价只是命中率略有下降。
+     */
+    private long jitterMinutes(long baseMinutes) {
+        long jitter = Math.max(1L, Math.round(baseMinutes * 0.2));
+        return baseMinutes + java.util.concurrent.ThreadLocalRandom.current()
+                .nextLong(-jitter, jitter + 1);
     }
 }

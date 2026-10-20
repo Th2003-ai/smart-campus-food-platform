@@ -2,6 +2,7 @@ package com.campus.delivery.security;
 
 import com.campus.delivery.common.api.ResultCode;
 import com.campus.delivery.common.exception.BusinessException;
+import com.campus.delivery.modules.user.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ import java.util.Arrays;
 public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtUtils jwtUtils;
+    private final AuthService authService;
 
     @Value("${campus.jwt.header:Authorization}")
     private String tokenHeader;
@@ -93,6 +95,11 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         if (StringUtils.hasText(tokenPrefix) && token.startsWith(tokenPrefix.trim())) {
             token = token.substring(tokenPrefix.trim().length()).trim();
+        }
+        // 已退出登录的 Token 立即失效（黑名单存于 Redis，TTL 与 Token 剩余有效期一致）
+        if (authService.isTokenBlacklisted(token)) {
+            log.debug("Token 已在黑名单中，拒绝访问: uri={}", request.getRequestURI());
+            return null;
         }
         return jwtUtils.parseToken(token);
     }

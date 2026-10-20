@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -39,6 +40,7 @@ public class ShopService {
     private final MerchantMapper merchantMapper;
     private final UserService userService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final com.campus.delivery.modules.rank.service.HotRankService hotRankService;
 
     /** 店铺列表（学生端首页） */
     public PageResult<Shop> pageShops(String categoryId, String keyword, String sortBy,
@@ -114,6 +116,7 @@ public class ShopService {
         shop.setLogo(form.getLogo());
         shopMapper.updateById(shop);
         evictCache(shop.getId());
+        hotRankService.invalidateShopRank();
         return shop;
     }
 
@@ -127,6 +130,7 @@ public class ShopService {
         shop.setBusinessStatus(businessStatus);
         shopMapper.updateById(shop);
         evictCache(shop.getId());
+        hotRankService.invalidateShopRank();
     }
 
     /**
@@ -271,5 +275,51 @@ public class ShopService {
             return "已驳回";
         }
         return "待审核";
+    }
+
+    // ==================================================================
+    // 商户注册（供 AuthService 调用）
+    // ==================================================================
+
+    /**
+     * 创建商户档案 + 一个默认店铺。
+     *
+     * <p>为什么要同时建店铺：商户审核通过后需要用「店铺设置」页维护信息，
+     * 而 {@link #currentShopId()} 要求账号下存在店铺，否则直接报「尚未创建店铺」。
+     * 店铺初始为「休息中」，需商户自己开店，避免注册即对外营业。
+     *
+     * <p>审核状态置为 {@code 0 待审核}，管理员在后台审核通过后
+     * {@link #currentMerchantId()} 才会放行商户端操作。
+     *
+     * @param userId       关联 sys_user.id
+     * @param merchantName 商户名称（同时作为默认店铺名）
+     * @param contactName  联系人
+     * @param contactPhone 联系电话
+     * @param licenseNo    营业执照编号（可空）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void registerMerchantProfile(String userId, String merchantName, String contactName,
+                                        String contactPhone, String licenseNo) {
+        Merchant merchant = new Merchant();
+        merchant.setUserId(userId);
+        merchant.setMerchantName(merchantName);
+        merchant.setContactName(contactName);
+        merchant.setContactPhone(contactPhone);
+        merchant.setLicenseNo(licenseNo);
+        merchant.setAuditStatus(CommonEnums.AuditStatus.WAITING.getCode());
+        merchantMapper.insert(merchant);
+
+        Shop shop = new Shop();
+        shop.setMerchantId(merchant.getId());
+        shop.setShopName(merchantName);
+        shop.setPhone(contactPhone);
+        // 休息中：注册后不直接对外营业，需商户自行开启
+        shop.setBusinessStatus(0);
+        shop.setBanStatus(0);
+        shop.setMinPrice(BigDecimal.ZERO);
+        shop.setDeliveryFee(BigDecimal.ZERO);
+        shop.setScore(new BigDecimal("5.00"));
+        shop.setMonthlySales(0);
+        shopMapper.insert(shop);
     }
 }
