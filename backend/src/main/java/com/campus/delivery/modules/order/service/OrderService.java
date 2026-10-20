@@ -357,7 +357,11 @@ public class OrderService {
             throw new BusinessException(40002, "手慢了，订单已被其他骑手抢走");
         }
         order.setRiderId(riderId);
-        orderMapper.updateById(order);
+        int rows = orderMapper.updateById(order);   // 带乐观锁 version：WHERE id=? AND version=?
+        if (rows == 0) {
+            // 版本号已变 = 别的骑手抢先绑定了
+            throw new BusinessException(40002, "手慢了，订单已被其他骑手抢走");
+        }
         removeFromGrabPool(orderId);
 
         Order latest = requireOrder(orderId);
