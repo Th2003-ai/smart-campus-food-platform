@@ -43,8 +43,13 @@ public class DevDataInitializer implements ApplicationRunner {
     @Value("${campus.dev.init-demo-password:false}")
     private boolean initDemoPassword;
 
+    /** 当前生效的数据库口令；用于在仍是占位符时提前给出明确提示 */
+    @Value("${spring.datasource.password:}")
+    private String datasourcePassword;
+
     @Override
     public void run(ApplicationArguments args) {
+        warnIfPlaceholderPassword();
         if (!initDemoPassword) {
             return;
         }
@@ -65,7 +70,29 @@ public class DevDataInitializer implements ApplicationRunner {
                 log.info("演示账号密码已初始化，跳过");
             }
         } catch (Exception e) {
-            log.warn("演示账号密码初始化跳过（可能尚未执行 database/schema.sql）：{}", e.getMessage());
+            log.warn("演示账号密码初始化跳过：{}", e.getMessage());
+            log.warn("排查顺序：① 启动 profile 是否为 dev,local（缺 local 会读不到 application-local.yml）"
+                    + "；② 是否已执行 database/schema.sql 与 data.sql"
+                    + "；③ MySQL 口令是否与 DB_PASSWORD 或 application-local.yml 一致");
+        }
+    }
+
+    /**
+     * 口令仍是占位符时提前告警。
+     *
+     * <p>这个提示是为了避免「启动看起来成功、实际连不上库」的迷惑场景：
+     * Hikari 连接池初始化失败不会阻断 Tomcat 启动，端口照样监听，
+     * 只有业务接口才会报错，排查成本较高。
+     */
+    private void warnIfPlaceholderPassword() {
+        if ("CHANGE_ME".equals(datasourcePassword)) {
+            log.error("======================================================================");
+            log.error("数据库口令仍是占位符 CHANGE_ME，必然无法连接数据库。");
+            log.error("请任选其一：");
+            log.error("  1) 以 dev,local 启动，并在 application-local.yml 中填写真实口令");
+            log.error("  2) 设置环境变量 DB_PASSWORD=<你的 MySQL 口令>");
+            log.error("  3) 使用加密配置：password: ENC(...)，并设置 JASYPT_ENCRYPTOR_PASSWORD");
+            log.error("======================================================================");
         }
     }
 }

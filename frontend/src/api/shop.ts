@@ -1,5 +1,6 @@
 import { get, put } from '@/utils/request'
 import type { PageResult } from '@/utils/request'
+import type { Dish } from '@/api/dish'
 
 /** 与后端 modules/shop/entity/Shop.java 字段保持一致 */
 export interface Shop {
@@ -34,6 +35,14 @@ export function listShops(params?: { keyword?: string; categoryId?: string; page
 
 export function getShopDetail(id: string) {
   return get<Shop>(`/shops/${id}`)
+}
+
+/**
+ * 学生端：店内菜品列表（只返回上架菜品）。
+ * 对应后端 GET /shops/{id}/dishes，返回 List 不分页。
+ */
+export function listShopDishes(shopId: string, categoryId?: string) {
+  return get<Dish[]>(`/shops/${shopId}/dishes`, { categoryId })
 }
 
 /** 商户端：我的店铺 */

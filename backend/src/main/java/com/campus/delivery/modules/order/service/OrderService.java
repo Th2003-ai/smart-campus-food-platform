@@ -309,6 +309,16 @@ public class OrderService {
         return orderMapper.statDailyTrend(days);
     }
 
+    /**
+     * 商户端经营概览：本店订单聚合指标。
+     *
+     * <p>店铺归属从登录态解析（{@code currentShopId}），不接受前端传参，
+     * 保证商户只能看到自己店铺的数据。
+     */
+    public Map<String, Object> shopOverview() {
+        return orderMapper.statShopOverview(shopService.currentShopId());
+    }
+
     /** 平台级订单总量（数据看板核心指标） */
     public long countAll() {
         Long total = orderMapper.selectCount(null);

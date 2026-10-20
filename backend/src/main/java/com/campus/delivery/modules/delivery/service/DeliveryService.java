@@ -312,4 +312,37 @@ public class DeliveryService {
         }
         return "待审核";
     }
+
+    // ==================================================================
+    // 骑手注册（供 AuthService 调用）
+    // ==================================================================
+
+    /**
+     * 创建骑手档案。
+     *
+     * <p>审核状态置为 {@code 0 待审核}：注册后可以登录，但
+     * {@link #requireRider} 会拦住抢单等动作，直到管理员审核通过。
+     *
+     * <p>其余字段取「新手默认值」：休息中、配送中 0 单、上限 3 单、累计收入 0。
+     *
+     * @param userId        关联 sys_user.id
+     * @param realName      真实姓名（rider.real_name 非空）
+     * @param studentCardNo 学生证/工号（可空）
+     * @param vehicleType   配送车辆（可空）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void registerRiderProfile(String userId, String realName,
+                                     String studentCardNo, String vehicleType) {
+        Rider rider = new Rider();
+        rider.setUserId(userId);
+        rider.setRealName(realName);
+        rider.setStudentCardNo(studentCardNo);
+        rider.setVehicleType(vehicleType);
+        rider.setWorkStatus(CommonEnums.WorkStatus.RESTING.getCode());
+        rider.setDeliveringCount(0);
+        rider.setMaxDelivering(3);
+        rider.setTotalIncome(BigDecimal.ZERO);
+        rider.setAuditStatus(CommonEnums.AuditStatus.WAITING.getCode());
+        riderMapper.insert(rider);
+    }
 }

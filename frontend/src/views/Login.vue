@@ -31,7 +31,7 @@
 
       <div class="footer">
         <span class="text-muted">演示账号见 database/README.md</span>
-        <el-button text type="primary" @click="router.push('/register')">注册学生账号</el-button>
+        <el-button text type="primary" @click="router.push('/register')">注册账号</el-button>
       </div>
     </el-card>
   </div>
