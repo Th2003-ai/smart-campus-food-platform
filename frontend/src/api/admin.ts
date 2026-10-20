@@ -54,6 +54,65 @@ export function dashboardTagCloud(limit = 30) {
   return get<Array<Record<string, unknown>>>('/admin/dashboard/tag-cloud', { limit })
 }
 
+/** 审核列表 */
+export interface MerchantAuditItem {
+  id: string
+  merchantName: string
+  contactName?: string
+  contactPhone?: string
+  licenseNo?: string
+  /** 0待审核 1已通过 2已驳回 */
+  auditStatus: number
+  auditRemark?: string
+  auditTime?: string
+  createTime?: string
+  userId?: string
+  /** 账号状态：0禁用 1正常（null 表示账号已不存在） */
+  accountStatus?: number | null
+}
+
+export interface RiderAuditItem {
+  id: string
+  realName: string
+  studentCardNo?: string
+  vehicleType?: string
+  /** 0休息中 1接单中 */
+  workStatus?: number
+  deliveringCount?: number
+  totalIncome?: number
+  /** 0待审核 1已通过 2已驳回 */
+  auditStatus: number
+  auditRemark?: string
+  createTime?: string
+  userId?: string
+  accountStatus?: number | null
+}
+
+export interface ShopAuditItem {
+  id: string
+  shopName: string
+  merchantId: string
+  /** 0休息中 1营业中 */
+  businessStatus?: number
+  /** 0正常 1已封禁 */
+  banStatus: number
+  monthlySales?: number
+  score?: number
+  createTime?: string
+}
+
+export function listMerchantsForAudit(auditStatus?: number) {
+  return get<MerchantAuditItem[]>('/admin/audit/merchants', { auditStatus })
+}
+
+export function listRidersForAudit(auditStatus?: number) {
+  return get<RiderAuditItem[]>('/admin/audit/riders', { auditStatus })
+}
+
+export function listShopsForAudit(banStatus?: number) {
+  return get<ShopAuditItem[]>('/admin/audit/shops', { banStatus })
+}
+
 /** 审核与处置 */
 export function auditMerchant(id: string, pass: boolean, remark?: string) {
   return post<void>(`/admin/audit/merchant/${id}`, null, { params: { pass, remark } })

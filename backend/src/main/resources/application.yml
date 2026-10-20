@@ -1,7 +1,23 @@
+# =====================================================================
+#  公共配置（换电脑部署时通常只需改环境变量，不必改本文件）
+#
+#  可配置项一览（均为「环境变量 : 默认值」形式，环境变量优先）：
+#    SERVER_PORT          服务端口               默认 8080
+#    SERVER_CONTEXT_PATH  接口前缀               默认 /api
+#    SPRING_PROFILES_ACTIVE 生效的 profile       默认 dev
+#    DB_URL / DB_USERNAME / DB_PASSWORD          见 application-dev.yml
+#    DB_HOST / DB_PORT / DB_NAME                 拆开配置数据库连接（可选）
+#    REDIS_HOST / REDIS_PORT / REDIS_PASSWORD    见 application-dev.yml
+#    JWT_SECRET           JWT 签名密钥（生产必改）
+#    LLM_API_URL / LLM_API_KEY / LLM_MODEL       大模型配置
+#    CORS_ALLOWED_ORIGINS 允许的前端来源
+#    UPLOAD_LOCAL_PATH    本地上传目录
+#    JASYPT_ENCRYPTOR_PASSWORD  解密 ENC(...) 的口令（见 docs/05-换机部署与配置.md）
+# =====================================================================
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   servlet:
-    context-path: /api
+    context-path: ${SERVER_CONTEXT_PATH:/api}
     encoding:
       charset: UTF-8
       force: true
@@ -10,7 +26,8 @@ spring:
   application:
     name: campus-ai-delivery
   profiles:
-    active: dev
+    # 可用环境变量切换：SPRING_PROFILES_ACTIVE=dev,local
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: GMT+8
@@ -64,31 +81,49 @@ campus:
   # JWT：secret 请通过环境变量 JWT_SECRET 注入，长度不少于 32 字符
   jwt:
     secret: ${JWT_SECRET:campus-ai-delivery-dev-secret-key-please-change-in-production}
-    expire-minutes: 720
+    expire-minutes: ${JWT_EXPIRE_MINUTES:720}
     header: Authorization
     prefix: "Bearer "
   # 大模型：API Key 只存服务端，禁止下发前端
   ai:
-    enabled: true
-    provider: openai-compatible
+    enabled: ${LLM_ENABLED:true}
+    provider: ${LLM_PROVIDER:openai-compatible}
     api-url: ${LLM_API_URL:https://api.example.com/v1/chat/completions}
     api-key: ${LLM_API_KEY:}
     model: ${LLM_MODEL:your-model-name}
-    temperature: 0.7
-    max-tokens: 2048
-    timeout-ms: 15000
+    temperature: ${LLM_TEMPERATURE:0.7}
+    max-tokens: ${LLM_MAX_TOKENS:2048}
+    timeout-ms: ${LLM_TIMEOUT_MS:15000}
     # 多轮对话上下文保留轮数（滑动窗口）
-    context-rounds: 6
+    context-rounds: ${LLM_CONTEXT_ROUNDS:6}
   # 文件存储：local 本地目录 / oss 对象存储
   file:
-    storage: local
-    local-path: ./uploads
+    storage: ${FILE_STORAGE:local}
+    local-path: ${UPLOAD_LOCAL_PATH:./uploads}
     url-prefix: /static
   # 跨域允许来源（前端开发服务器地址，多个用英文逗号分隔）
   # 注意：必须写成逗号分隔的字符串，不能用 YAML 列表（- 开头），
   #       否则 WebMvcConfig 的 @Value("${campus.cors.allowed-origins}") 无法解析。
   cors:
-    allowed-origins: http://localhost:5173,http://127.0.0.1:5173
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+
+# ---------------------------------------------------------------------
+# 敏感值加密（Jasypt）
+# 把 DB_PASSWORD 之类改成 ENC(密文) 即可，解密口令来自环境变量
+#   JASYPT_ENCRYPTOR_PASSWORD（或启动参数 -Djasypt.encryptor.password=...）
+# 生成密文：见 common/util/ConfigEncryptor
+# ---------------------------------------------------------------------
+jasypt:
+  encryptor:
+    # 不设默认值：未配置时 Jasypt 视为「未启用」，此时不应在配置里写 ENC(...)，
+    # 否则启动会明确报错（fail-closed，避免静默用了错误的密钥）
+    password: ${JASYPT_ENCRYPTOR_PASSWORD:}
+    algorithm: PBEWITHHMACSHA512ANDAES_256
+    iv-generator-classname: org.jasypt.iv.RandomIvGenerator
+    # 兼容旧写法：仅用于从明文迁移到 ENC() 期间，见 docs/05-换机部署与配置.md
+    property:
+      prefix: "ENC("
+      suffix: ")"
 
 logging:
   level:
