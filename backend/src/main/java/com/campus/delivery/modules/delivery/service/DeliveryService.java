@@ -51,6 +51,7 @@ public class DeliveryService {
     private final GrabLogMapper grabLogMapper;
     private final OrderService orderService;
     private final UserService userService;
+    private final RiderOnlineService riderOnlineService;
     private final RedisTemplate<String, Object> redisTemplate;
 
     /** 订单大厅：可抢订单列表 */
@@ -127,7 +128,24 @@ public class DeliveryService {
     public Map<String, Object> income(String riderId) {
         Map<String, Object> stat = grabLogMapper.statIncome(riderId);
         stat.put("totalIncome", grabLogMapper.sumIncome(riderId));
+        stat.put("online", riderOnlineService.isOnline(riderId));
+        stat.put("lastHeartbeat", riderOnlineService.lastHeartbeat(riderId));
         return stat;
+    }
+
+    /**
+     * 骑手上线心跳（供非 WebSocket 场景使用，如接口轮询的客户端）。
+     *
+     * <p>续期 Redis 在线标记；超过 60 秒没有心跳即视为离线。
+     */
+    public void heartbeat(String riderId) {
+        Rider rider = requireRider(riderId);
+        riderOnlineService.markOnline(rider.getId());
+    }
+
+    /** 骑手是否在线（Redis 在线标记是否仍有效） */
+    public boolean isOnline(String riderId) {
+        return riderOnlineService.isOnline(riderId);
     }
 
     /** 切换工作状态：0休息中 1接单中 */

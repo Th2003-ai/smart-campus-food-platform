@@ -1,6 +1,7 @@
 package com.campus.delivery.modules.user.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.campus.delivery.common.constant.RedisKeys;
 import com.campus.delivery.common.exception.BusinessException;
 import com.campus.delivery.common.util.PasswordGenerator;
 import com.campus.delivery.modules.user.dto.LoginRequest;
@@ -17,11 +18,13 @@ import com.campus.delivery.security.LoginUser;
 import com.campus.delivery.security.RoleEnum;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 认证服务：登录、注册、退出。主责：成员4。
@@ -48,6 +51,7 @@ public class AuthService {
     private final StudentMapper studentMapper;
     private final DietProfileMapper dietProfileMapper;
     private final JwtUtils jwtUtils;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     /** 登录 */
     public LoginResponse login(LoginRequest request) {
@@ -118,14 +122,58 @@ public class AuthService {
     }
 
     /**
-     * 退出登录。
+     * 退出登录：把 Token 写入 Redis 黑名单，使其立即失效。
      *
-     * <p>JWT 无状态，服务端不做会话销毁。如需强制失效，可把 Token 写入
-     * {@code RedisKeys.TOKEN_BLACKLIST} 并在拦截器中校验（预留实现）。
+     * <p>JWT 本身无状态、签发后无法「撤回」，所以采用「黑名单」方式：
+     * 退出时把该 Token 以 {@code auth:token:blacklist:<token>} 存入 Redis，
+     * TTL 设为该 Token 的剩余有效期 —— 到期后 Redis 自动清理，不会无限堆积。
+     * {@code AuthInterceptor} 在每次请求时先查黑名单，命中则拒绝。
      */
-    public void logout(String token) {
-        // TODO(成员4): 将 token 写入 Redis 黑名单，过期时间取 Token 剩余有效期
-        log.info("用户退出登录");
+    public void logout(String authorizationHeader) {
+        String token = resolveToken(authorizationHeader);
+        if (!StringUtils.hasText(token)) {
+            return;
+        }
+        long remaining = jwtUtils.getRemainingSeconds(token);
+        if (remaining <= 0) {
+            // Token 已过期或非法，无需再拉黑
+            return;
+        }
+        redisTemplate.opsForValue().set(
+                RedisKeys.TOKEN_BLACKLIST + token, System.currentTimeMillis(), remaining, TimeUnit.SECONDS);
+        log.info("用户退出登录，Token 已加入黑名单，剩余有效期 {} 秒", remaining);
+    }
+
+    /**
+     * 判断 Token 是否已在黑名单中（供拦截器调用）。
+     *
+     * <p>Redis 异常时返回 false（放行）：认证链路的可用性优先，
+     * 避免因缓存故障导致全站无法登录；此时仅失去「主动退出即时生效」能力。
+     */
+    public boolean isTokenBlacklisted(String token) {
+        if (!StringUtils.hasText(token)) {
+            return false;
+        }
+        try {
+            Boolean exists = redisTemplate.hasKey(RedisKeys.TOKEN_BLACKLIST + token);
+            return Boolean.TRUE.equals(exists);
+        } catch (Exception e) {
+            log.warn("查询 Token 黑名单失败，降级放行: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /** 从 Authorization 头中剥离 Bearer 前缀 */
+    private String resolveToken(String authorizationHeader) {
+        if (!StringUtils.hasText(authorizationHeader)) {
+            return null;
+        }
+        String token = authorizationHeader.trim();
+        String prefix = "Bearer ";
+        if (token.regionMatches(true, 0, prefix, 0, prefix.length())) {
+            token = token.substring(prefix.length()).trim();
+        }
+        return token;
     }
 
     private SysUser findByUsername(String username) {

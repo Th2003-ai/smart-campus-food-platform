@@ -87,6 +87,15 @@ public class RiderController {
         return Result.ok(deliveryService.getByUserId(UserContext.getUserId()));
     }
 
+    @Operation(summary = "上线心跳",
+            description = "续期 Redis 在线标记（60 秒无心跳即视为离线），返回当前是否在线")
+    @PostMapping("/heartbeat")
+    public Result<Map<String, Object>> heartbeat() {
+        String riderId = currentRiderId();
+        deliveryService.heartbeat(riderId);
+        return Result.ok(Map.of("riderId", riderId, "online", deliveryService.isOnline(riderId)));
+    }
+
     /** 当前登录账号对应的骑手ID */
     private String currentRiderId() {
         Rider rider = deliveryService.getByUserId(UserContext.getUserId());

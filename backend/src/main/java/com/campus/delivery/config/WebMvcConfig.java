@@ -32,6 +32,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
             "/auth/register",
             "/shops/**",
             "/dishes/**",
+            "/rank/**",
             "/reviews",
             "/error",
             "/static/**",

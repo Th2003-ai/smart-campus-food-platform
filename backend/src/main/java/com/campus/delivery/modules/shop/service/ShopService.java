@@ -39,6 +39,7 @@ public class ShopService {
     private final MerchantMapper merchantMapper;
     private final UserService userService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final com.campus.delivery.modules.rank.service.HotRankService hotRankService;
 
     /** 店铺列表（学生端首页） */
     public PageResult<Shop> pageShops(String categoryId, String keyword, String sortBy,
@@ -114,6 +115,7 @@ public class ShopService {
         shop.setLogo(form.getLogo());
         shopMapper.updateById(shop);
         evictCache(shop.getId());
+        hotRankService.invalidateShopRank();
         return shop;
     }
 
@@ -127,6 +129,7 @@ public class ShopService {
         shop.setBusinessStatus(businessStatus);
         shopMapper.updateById(shop);
         evictCache(shop.getId());
+        hotRankService.invalidateShopRank();
     }
 
     /**
