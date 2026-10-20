@@ -92,3 +92,43 @@ export function listTickets(params?: { status?: number; pageNum?: number; pageSi
 export function handleTicket(id: string, reply: string, close = false) {
   return post<void>(`/tickets/${id}/handle`, null, { params: { reply, close } })
 }
+
+/** 菜单权限树（树形数据结构可视化） */
+export interface MenuNode {
+  id: string
+  parentId: string
+  label: string
+  menuType: number
+  typeText: string
+  path?: string
+  component?: string
+  perms?: string
+  icon?: string
+  sort?: number
+  visible?: number
+  status?: number
+  children?: MenuNode[]
+}
+
+/** 菜单平铺记录（数据库 sys_menu 原始行） */
+export interface MenuFlat {
+  id: string
+  parentId: string
+  menuName: string
+  menuType: number
+  path?: string
+  component?: string
+  perms?: string
+  icon?: string
+  sort?: number
+}
+
+/** 菜单树形结构（目录→菜单→按钮） */
+export function menuTree() {
+  return get<MenuNode[]>('/admin/menu/tree')
+}
+
+/** 菜单平铺列表 */
+export function menuList() {
+  return get<MenuFlat[]>('/admin/menu/list')
+}

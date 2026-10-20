@@ -5,7 +5,7 @@
   "type": "module",
   "description": "智能 AI 校园外卖平台 · 前端（学生端 / 商户端 / 骑手端 / 管理员端）",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview"
   },

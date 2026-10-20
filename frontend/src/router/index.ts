@@ -90,7 +90,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'riders', name: 'AdminRiders', component: () => import('@/views/admin/Riders.vue'), meta: { title: '骑手审核' } },
       { path: 'knowledge', name: 'AdminKnowledge', component: () => import('@/views/admin/Knowledge.vue'), meta: { title: '知识库' } },
       { path: 'tickets', name: 'AdminTickets', component: () => import('@/views/admin/Tickets.vue'), meta: { title: '客服工单' } },
-      { path: 'config', name: 'AdminConfig', component: () => import('@/views/admin/Config.vue'), meta: { title: '系统配置' } }
+      { path: 'config', name: 'AdminConfig', component: () => import('@/views/admin/Config.vue'), meta: { title: '系统配置' } },
+      { path: 'menu', name: 'AdminMenuTree', component: () => import('@/views/admin/MenuTree.vue'), meta: { title: '菜单权限树' } }
     ]
   },
 
