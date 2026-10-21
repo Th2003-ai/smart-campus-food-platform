@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -59,7 +60,6 @@ public class DeliveryService {
     private final OrderService orderService;
     private final UserService userService;
     private final RiderOnlineService riderOnlineService;
-    private final RedisTemplate<String, Object> redisTemplate;
     /** 抢单池 ZSet 的 member 是订单ID，用纯字符串序列化便于排查 */
     private final StringRedisTemplate stringRedisTemplate;
 
@@ -68,12 +68,37 @@ public class DeliveryService {
         return orderService.pageGrabPoolOrders(pageNum, pageSize);
     }
 
+    /**
+     * 释放分布式锁：先 GET 校验 value，再 DEL。
+     *
+     * <p>为什么不能直接 {@code delete(lockKey)}：
+     * 如果业务执行时间超过锁 TTL，锁已自动过期并被别的骑手拿走，
+     * 原持有者执行完后一删，就把别人的锁删掉了 —— 这正是 PPT
+     * 「四个必踩的坑」里的「误删他人锁」。Lua 在 Redis 内单线程执行，
+     * 判断与删除之间没有窗口。
+     */
+    private static final DefaultRedisScript<Long> UNLOCK_SCRIPT = new DefaultRedisScript<>(
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then "
+                    + "return redis.call('DEL', KEYS[1]) else return 0 end",
+            Long.class);
+
+    private void releaseLock(String key, String value) {
+        try {
+            stringRedisTemplate.execute(UNLOCK_SCRIPT, List.of(key), value);
+        } catch (Exception e) {
+            // 释放失败不影响业务：锁最多留到 TTL 自然过期
+            log.warn("释放抢单锁失败: key={}, err={}", key, e.getMessage());
+        }
+    }
+
     /** 抢单 */
     @Transactional(rollbackFor = Exception.class)
     public Order grab(String riderId, String orderId) {
         String lockKey = RedisKeys.LOCK_ORDER_GRAB + orderId;
-        Boolean locked = redisTemplate.opsForValue()
-                .setIfAbsent(lockKey, riderId, GRAB_LOCK_SECONDS, TimeUnit.SECONDS);
+        // value 存随机 UUID 而不是 riderId：释放时用它校验「锁还是不是自己的」
+        String lockValue = UUID.randomUUID().toString();
+        Boolean locked = stringRedisTemplate.opsForValue()
+                .setIfAbsent(lockKey, lockValue, GRAB_LOCK_SECONDS, TimeUnit.SECONDS);
         if (!Boolean.TRUE.equals(locked)) {
             recordGrabLog(orderId, riderId, 0, "手慢了，订单已被其他骑手抢走");
             throw new BusinessException(CODE_GRAB_FAILED, "手慢了，订单已被其他骑手抢走");
@@ -112,7 +137,7 @@ public class DeliveryService {
             stringRedisTemplate.opsForZSet().add(RedisKeys.GRAB_POOL, orderId, System.currentTimeMillis());
             throw e;
         } finally {
-            redisTemplate.delete(lockKey);
+            releaseLock(lockKey, lockValue);
         }
     }
 
