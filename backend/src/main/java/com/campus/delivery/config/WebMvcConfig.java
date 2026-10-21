@@ -33,7 +33,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
             "/shops/**",
             "/dishes/**",
             "/rank/**",
-            "/reviews",
+            // 注意：不要在这里加 "/reviews"。excludePathPatterns 只能按路径排除，
+            // 加了会把 POST /reviews（学生提交评价）也放行，导致控制器拿不到登录态而抛 401。
+            // 「评价列表公开、提交需登录」由 AuthInterceptor#PUBLIC_GET_PATHS 按方法处理。
             "/error",
             "/static/**",
             "/ws/**",

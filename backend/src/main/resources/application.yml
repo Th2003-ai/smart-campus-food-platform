@@ -109,8 +109,15 @@ campus:
   # 跨域允许来源（前端开发服务器地址，多个用英文逗号分隔）
   # 注意：必须写成逗号分隔的字符串，不能用 YAML 列表（- 开头），
   #       否则 WebMvcConfig 的 @Value("${campus.cors.allowed-origins}") 无法解析。
+  #
+  # 2026-10 补充：浏览器对 POST/PUT/DELETE 一定会带 Origin 头（即使是同源请求），
+  # 后端因此会走 CORS 校验，Origin 不在白名单就直接回 403 Invalid CORS request。
+  # 所以经 Nginx 子域名/端口访问时，必须把那些 origin 也加进来：
+  #   http://*.campus.local:8088  —— 子域名模式（student/merchant/rider/admin 四个）
+  #   http://localhost:8088~8091  —— 端口模式（deploy/nginx-ports.conf）
+  # WebMvcConfig 用的是 allowedOriginPatterns，支持 * 通配。
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://*.campus.local:8088,http://localhost:8088,http://localhost:8089,http://localhost:8090,http://localhost:8091}
 
 # ---------------------------------------------------------------------
 # 敏感值加密（Jasypt）

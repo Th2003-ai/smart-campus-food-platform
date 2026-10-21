@@ -14,13 +14,10 @@
       </template>
 
       <!-- 状态进度：当前没有 order_status_log 的查询接口，
-           这里按 orderStatus 推导当前节点，已取消/申诉单独提示 -->
+           这里按 orderStatus 推导当前节点，已取消/申诉单独提示。
+           自取单没有"配送中"环节，步骤条会少一步。 -->
       <el-steps v-if="!isAbnormal" :active="activeStep" align-center finish-status="success" class="steps">
-        <el-step title="已下单" />
-        <el-step title="备餐中" />
-        <el-step title="待取餐" />
-        <el-step title="配送中" />
-        <el-step title="已完成" />
+        <el-step v-for="(title, i) in stepTitles" :key="i" :title="title" />
       </el-steps>
       <el-alert
         v-else
@@ -29,6 +26,15 @@
         :closable="false"
         show-icon
         class="abnormal"
+      />
+
+      <el-alert
+        v-if="selfPickup && vo.order.orderStatus === 2"
+        type="success"
+        :closable="false"
+        show-icon
+        class="abnormal"
+        :title="`自取订单：请到店向商家报取餐码 ${vo.order.pickupCode || ''}，拿到餐后点「确认取餐」`"
       />
 
       <el-descriptions :column="2" border class="block">
@@ -78,6 +84,14 @@
           取消订单
         </el-button>
         <el-button
+          v-if="showConfirmPickup"
+          type="success"
+          :loading="confirming"
+          @click="onConfirmPickup"
+        >
+          确认取餐
+        </el-button>
+        <el-button
           v-if="canReviewOrder(vo.order.orderStatus)"
           type="primary"
           @click="router.push('/student/orders')"
@@ -96,11 +110,13 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { cancelOrder, getOrderDetail, type OrderVO } from '@/api/order'
+import { cancelOrder, confirmSelfPickup, getOrderDetail, type OrderVO } from '@/api/order'
 import {
   canCancelOrder,
+  canConfirmPickup,
   canReviewOrder,
   deliveryTypeText,
+  isSelfPickup,
   money,
   orderStatusTagType,
   orderStatusText,
@@ -114,6 +130,7 @@ const router = useRouter()
 const orderId = route.params.orderId as string
 const vo = ref<OrderVO | null>(null)
 const loading = ref(false)
+const confirming = ref(false)
 
 /** 是否处于非正常流程（已取消 / 申诉中），这两种不走步骤条 */
 const isAbnormal = computed(() => {
@@ -121,14 +138,33 @@ const isAbnormal = computed(() => {
   return s === 5 || s === 6
 })
 
+const selfPickup = computed(() => isSelfPickup(vo.value?.order.deliveryType))
+
+/** 自取单没有"配送中"，所以步骤条少一步 */
+const stepTitles = computed(() =>
+  selfPickup.value
+    ? ['已下单', '备餐中', '待取餐', '已完成']
+    : ['已下单', '备餐中', '待取餐', '配送中', '已完成']
+)
+
 /**
- * el-steps 的 active 从 0 开始：0 已下单 / 1 备餐中 / 2 待取餐 / 3 配送中 / 4 已完成
- * 订单状态 0~4 与之一一对应；已完成时 active 需要是 5 才会全部点亮。
+ * el-steps 的 active 从 0 开始，表示"当前进行到第几步"。
+ * 配送单：状态 0~4 与步骤下标一一对应，已完成时用 5 让全部点亮。
+ * 自取单：只有 4 步，状态 4（已完成）对应 active=4。
  */
 const activeStep = computed(() => {
   const s = vo.value?.order.orderStatus ?? 0
+  if (selfPickup.value) {
+    // 自取单理论上不会出现 3（配送中），若出现按"待取餐"处理
+    return s === 4 ? 4 : Math.min(s, 2)
+  }
   return s === 4 ? 5 : s
 })
+
+/** 待取餐且是自取单时，学生可以自己点"确认取餐"（商户也可以在他的订单页点） */
+const showConfirmPickup = computed(() =>
+  canConfirmPickup(vo.value?.order.deliveryType, vo.value?.order.orderStatus)
+)
 
 async function load() {
   loading.value = true
@@ -138,6 +174,28 @@ async function load() {
     // 越权或不存在由拦截器提示
   } finally {
     loading.value = false
+  }
+}
+
+async function onConfirmPickup() {
+  try {
+    await ElMessageBox.confirm(
+      '确认已经拿到餐品？确认后订单将直接完成，且不能再取消。',
+      '确认取餐',
+      { type: 'warning', confirmButtonText: '已取餐', cancelButtonText: '还没拿到' }
+    )
+  } catch {
+    return
+  }
+  confirming.value = true
+  try {
+    await confirmSelfPickup(orderId)
+    ElMessage.success('已确认取餐，订单完成，可以去评价了')
+    await load()
+  } catch {
+    // 状态已变更等业务错误由拦截器提示
+  } finally {
+    confirming.value = false
   }
 }
 

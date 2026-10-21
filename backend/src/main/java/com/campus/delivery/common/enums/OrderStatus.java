@@ -50,7 +50,7 @@ public enum OrderStatus {
      * <pre>
      *   0 待接单 → 1 备餐中 / 5 已取消
      *   1 备餐中 → 2 待取餐 / 5 已取消
-     *   2 待取餐 → 3 配送中 / 5 已取消
+     *   2 待取餐 → 3 配送中（配送单） / 4 已完成（自取单） / 5 已取消
      *   3 配送中 → 4 已完成
      *   4 已完成 → 6 申诉中
      *   5 已取消 → 终态
@@ -64,7 +64,11 @@ public enum OrderStatus {
             case PREPARING:
                 return EnumSet.of(PENDING_PICKUP, CANCELED);
             case PENDING_PICKUP:
-                return EnumSet.of(DELIVERING, CANCELED);
+                // 配送单需要骑手先取餐进入「配送中」再送达；
+                // 自取单没有骑手环节，由下单学生或店铺商户直接确认取餐进入「已完成」。
+                // 至于是不是自取单，由 OrderService#confirmSelfPickup 校验 deliveryType=2，
+                // OrderService#merchantTransit / riderTransit 也只允许各自的合法目标状态。
+                return EnumSet.of(DELIVERING, FINISHED, CANCELED);
             case DELIVERING:
                 return EnumSet.of(FINISHED);
             case FINISHED:

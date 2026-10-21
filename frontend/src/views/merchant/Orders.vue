@@ -98,8 +98,26 @@
             >
               出餐完成
             </el-button>
-            <span v-if="vo.order.orderStatus === 2" class="text-muted">
+            <el-button
+              v-if="canConfirmPickup(vo.order.deliveryType, vo.order.orderStatus)"
+              type="success"
+              size="small"
+              :loading="actingId === vo.order.id"
+              @click="onConfirmPickup(vo.order)"
+            >
+              确认交付（自取）
+            </el-button>
+            <span
+              v-if="vo.order.orderStatus === 2 && vo.order.deliveryType !== 2"
+              class="text-muted"
+            >
               已于出餐时生成取餐码 {{ vo.order.pickupCode }}，等待骑手接单
+            </span>
+            <span
+              v-if="vo.order.orderStatus === 2 && vo.order.deliveryType === 2"
+              class="text-muted"
+            >
+              自取订单，等待学生到店报取餐码 {{ vo.order.pickupCode }} 取餐
             </span>
           </div>
         </div>
@@ -123,8 +141,16 @@ import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
 
-import { acceptOrder, listShopOrders, readyOrder, rejectOrder, type OrderVO } from '@/api/order'
 import {
+  acceptOrder,
+  confirmSelfPickup,
+  listShopOrders,
+  readyOrder,
+  rejectOrder,
+  type OrderVO
+} from '@/api/order'
+import {
+  canConfirmPickup,
   deliveryTypeText,
   money,
   orderStatusTagType,
@@ -161,6 +187,34 @@ async function load() {
 function reload() {
   page.pageNum = 1
   load()
+}
+
+/**
+ * 自取订单确认交付（2 待取餐 → 4 已完成）。
+ *
+ * 走的是学生端同一个接口：后端按登录角色判断，商户只能确认本店订单。
+ * 商户忙没来得及点时，学生也可以在自己的订单详情页自助确认，避免订单卡死。
+ */
+async function onConfirmPickup(order: OrderVO['order']) {
+  try {
+    await ElMessageBox.confirm(
+      `确认已把餐品交给学生？（取餐码 ${order.pickupCode || '-'}）确认后订单直接完成。`,
+      '确认交付',
+      { type: 'warning', confirmButtonText: '确认交付', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  actingId.value = order.id
+  try {
+    await confirmSelfPickup(order.id)
+    ElMessage.success('已确认交付，订单完成')
+    await load()
+  } catch {
+    // 状态已变更等业务错误由拦截器提示
+  } finally {
+    actingId.value = ''
+  }
 }
 
 async function onAccept(orderId: string) {

@@ -41,6 +41,18 @@ public final class RedisKeys {
     public static final String LOCK_ORDER_GRAB = "lock:order:grab:";
 
     /**
+     * 订单超时未接单延时队列（有序集合）。
+     *
+     * <p>member = orderId，score = 到期时间（epoch 毫秒）。
+     * 下单时入队，商户接单/拒单/学生取消时出队；
+     * 定时任务只扫描 score ≤ 当前时间 的成员，把仍然「待接单」的订单自动取消。
+     *
+     * <p>用 ZSet 而不是为每个订单起一个定时器：Redis 的 score 天生有序，
+     * 一次 {@code ZRANGEBYSCORE 0 now} 就能拿到所有到期订单，O(log N)。
+     */
+    public static final String ORDER_TIMEOUT_QUEUE = "order:timeout:queue";
+
+    /**
      * 菜品详情回源重建锁：lock:dish:cache:{dishId}
      *
      * <p>用于「缓存击穿」防护：热点 key 过期瞬间只允许一个线程回源查库并重建缓存。

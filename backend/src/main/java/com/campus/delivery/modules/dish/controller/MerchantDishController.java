@@ -9,6 +9,7 @@ import com.campus.delivery.security.RequiresRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -63,5 +64,18 @@ public class MerchantDishController {
     @GetMapping("/dish-categories")
     public Result<List<DishCategory>> categories(@RequestParam String shopId) {
         return Result.ok(dishService.listCategories(shopId));
+    }
+
+    /**
+     * 删除菜品（逻辑删除）。
+     *
+     * <p>此前该接口缺失，商户端「删除」按钮请求会返回 404。
+     * 只能删除本店菜品；已成交的订单保存的是明细快照，不受影响。
+     */
+    @Operation(summary = "删除菜品", description = "逻辑删除，仅限本店菜品；历史订单快照不受影响")
+    @DeleteMapping("/dishes/{id}")
+    public Result<Void> remove(@PathVariable String id) {
+        dishService.removeDish(id);
+        return Result.ok();
     }
 }
