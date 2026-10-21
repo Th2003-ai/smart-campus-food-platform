@@ -23,6 +23,10 @@ public enum ResultCode {
     UNAUTHORIZED(401, "未登录或登录已过期"),
     FORBIDDEN(403, "无访问权限"),
     NOT_FOUND(404, "请求的资源不存在"),
+    /** 触发限流 */
+    TOO_MANY_REQUESTS(429, "操作过于频繁，请稍后再试"),
+    /** 重复提交（幂等键未释放或已处理中） */
+    CONFLICT(409, "请求正在处理中，请勿重复提交"),
     BUSINESS_ERROR(500, "业务处理失败"),
     SYSTEM_ERROR(500, "系统异常，请稍后重试");
 

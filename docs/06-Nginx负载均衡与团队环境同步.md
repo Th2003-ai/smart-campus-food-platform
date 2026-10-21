@@ -341,3 +341,158 @@ feat(deploy): 新增 Nginx 双实例负载均衡与四端 origin 隔离
 | 前端页面完成度与接口对照 | `docs/前端补全清单.md` |
 | 接口规范 | `docs/03-接口规范与协作约定.md` |
 | 分工与模块归属 | `docs/02-四人分工与模块归属.md` |
+
+---
+
+## 十、接口限流与下单幂等（本次一并新增）
+
+### 10.1 接口限流
+
+**做什么**：限制同一调用方在时间窗口内的请求次数，超限返回业务码 `429`。
+
+**实现**：`@RateLimit` 注解 + `RateLimitInterceptor`（Redis 固定窗口计数，Lua 保证 `INCR`+`EXPIRE` 原子）。
+key 里带窗口序号（`rate:{name}:{subject}:{当前秒/窗口秒}`），每个窗口独立 key，天然过期，
+不会出现"key 永不过期导致永久限流"的问题。Redis 异常时**放行**（fail-open），优先保业务可用。
+
+**已接入的接口**：
+
+| 接口 | 维度 | 阈值 | 目的 |
+|---|---|---|---|
+| `POST /auth/login` | IP | 5 次 / 60 秒 | 防密码爆破 |
+| `POST /orders` | 用户 | 10 次 / 60 秒 | 防刷单 |
+| `POST /reviews` | 用户 | 5 次 / 60 秒 | 防刷评价 |
+| `POST /ai/order`、`POST /ai/chat` | 用户 | 20 次 / 300 秒 | 控制大模型调用成本 |
+| `POST /rider/grab/{orderId}` | 用户 | 30 次 / 60 秒 | 防脚本抢单 |
+
+超限响应示例：
+
+```json
+{ "code": 429, "message": "登录尝试过于频繁（60 秒内最多 5 次）" }
+```
+
+**怎么验证**：连续调登录 6 次，第 6 次返回 `429`；Redis 里能看到 `rate:auth:login:ip:127.0.0.1:<窗口序号>`。
+
+**怎么临时关闭**：把注解的 `enabled` 改 `false`；或清掉限流计数：
+
+```powershell
+redis-cli KEYS "rate:*" | ForEach-Object { redis-cli DEL $_ }
+```
+
+### 10.2 下单幂等
+
+**做什么**：同一笔下单重复提交（双击、超时重试、刷新重发）只产生**一条订单**。
+
+**三层防护**：
+
+| 层 | 机制 | 作用 |
+|---|---|---|
+| 1 | Redis `SET idempotent:order:{userId}:{requestId} NX EX 300` | 快速拦截；值已是订单ID时**直接返回原订单** |
+| 2 | 数据库唯一索引 `uk_user_request (user_id, request_id)` | Redis 失效/并发穿透时的最终兜底 |
+| 3 | 订单状态机的前置校验 | 取消、取餐等后续操作天然幂等 |
+
+**前端**：进入结算页时生成一个 UUID，作为请求头 `X-Request-Id` 提交；下单成功后作废。
+
+```
+前端                                  后端
+openCheckout() → requestId = UUID()
+POST /orders  X-Request-Id: xxx  →    SET NX → 创建订单 → 记录 orderId
+再次 POST 同一 xxx                →    命中 → 返回同一张订单（不会重复创建）
+```
+
+**返回行为**：
+
+| 情况 | 结果 |
+|---|---|
+| 首次提交 | `200`，创建订单 |
+| 重复提交（已成功） | `200`，返回**同一张订单**（订单号相同） |
+| 重复提交（上一请求还在处理） | `409`「请求正在处理中，请勿重复提交」 |
+| Redis 键丢失后重复提交 | `409`「该订单已提交，请勿重复提交」（数据库唯一索引拦截） |
+| 不同 requestId | 正常创建新订单 |
+
+**⚠️ 队友必做：数据库增量升级**
+
+老库需要执行一次（新库直接用 `schema.sql` 即可，已包含）：
+
+```sql
+SOURCE database/upgrade-2026-10-21-order-idempotent.sql;
+```
+
+它会给 `orders` 加 `request_id` 列和 `uk_user_request` 唯一索引。
+不执行会报 `Unknown column 'request_id'`。
+
+### 10.3 本次新增的文件
+
+| 文件 | 说明 |
+|---|---|
+| `common/annotation/RateLimit.java` | 限流注解 |
+| `common/annotation/LimitBy.java` | 计数维度枚举（USER / IP） |
+| `security/RateLimitInterceptor.java` | 限流拦截器（Lua + Redis） |
+| `database/upgrade-2026-10-21-order-idempotent.sql` | 幂等所需的数据库增量脚本 |
+
+修改的文件：`WebMvcConfig`（注册拦截器 + 顺序）、`AuthInterceptor` 无改动、`OrderService`（幂等包装）、
+`OrderController`（读 `X-Request-Id`）、`Order`（`requestId` 字段）、若干 Controller 加 `@RateLimit`、
+`frontend/src/api/order.ts` 与 `student/Cart.vue`（生成并发送幂等键）、`ResultCode`（429/409）。
+
+---
+
+## 十一、余额支付与退款（本次新增）
+
+### 11.1 之前的问题
+
+`student.balance` 字段一直存在但**从未被读写**，`payment_record` 表从未写入，
+下单只是把 `pay_status` 直接置成"已支付"。也就是说 PPT 里"金额/余额只落磁盘库 + 事务"这条
+在代码上并不成立。
+
+### 11.2 现在的实现
+
+新增 `modules/payment`：
+
+| 文件 | 作用 |
+|---|---|
+| `payment/entity/PaymentRecord.java` | `payment_record` 表映射（一单一条，`uk_order_id`） |
+| `payment/mapper/PaymentRecordMapper.java` | 数据访问 |
+| `payment/service/PaymentService.java` | `charge()` 收款、`refund()` 退款 |
+
+关键设计（都是"金额只落库、不进 Redis"）：
+
+| 关注点 | 做法 |
+|---|---|
+| 扣款 | `UPDATE student SET balance = balance - ? WHERE user_id = ? AND balance >= ?`，影响行数 0 → 余额不足 |
+| 退款闸门 | `UPDATE orders SET pay_status = 2 WHERE id = ? AND pay_status = 1`，只有抢到这次更新才退钱 |
+| 幂等 | 重复退款时闸门返回 0 行，**不会重复加钱** |
+| 流水 | 支付写 `payment_record(status=1)`，退款改 `status=3` |
+
+**退款触发点**（三处都已接上）：学生取消、商户拒单、超时未接单自动取消。
+
+### 11.3 支付方式
+
+| payType | 行为 |
+|---|---|
+| **1 余额** | 扣减 `student.balance`，不足则整单回滚并提示「余额不足：本单需 ¥xx，请先充值或改用模拟第三方支付」 |
+| **2 模拟第三方** | 不动余额，仅写流水；退款时也不退余额 |
+
+前端结算弹窗已加「支付方式」单选，并显示当前余额（不足时红字提示）。
+
+### 11.4 ⚠️ 队友必做：给自己的演示学生充值
+
+`data.sql` 已给演示学生加了 `balance = 200.00`，但**已有的库不会自动更新**，
+余额为 0 时用余额支付会报"余额不足"。执行一次：
+
+```sql
+UPDATE campus_ai_delivery.student SET balance = 200.00 WHERE student_no = '20210001';
+```
+
+或者在下单时直接选「模拟第三方」支付。
+
+### 11.5 验证结果（真实请求）
+
+| 场景 | 结果 |
+|---|---|
+| 初始余额 | `200.00` |
+| 余额支付 14.50 | 下单成功，余额 → `185.50` |
+| 学生取消 | 余额回到 `200.00`，`pay_status=2`，流水 `status=3` |
+| 模拟第三方 14.50 | 余额保持 `200.00`；商户拒单后余额仍 `200.00`，`pay_status=2` |
+| 余额仅剩 1.00 时下单 | `code=30050 余额不足：本单需 ¥14.50…`，余额不变，**购物车保留** |
+| `payment_record` | 两条流水，`trade_no` 分别为 `BAL…` / `MOCK…` |
+
+

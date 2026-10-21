@@ -1,5 +1,6 @@
 package com.campus.delivery.modules.ai.controller;
 
+import com.campus.delivery.common.annotation.RateLimit;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.ai.dto.AiChatRequest;
 import com.campus.delivery.modules.ai.dto.AiOrderResponse;
@@ -40,6 +41,7 @@ public class AiController {
     private final ChatbotService chatbotService;
 
     @Operation(summary = "AI 自然语言点餐", description = "输入「20 块以内、不辣、有肉」这类描述，返回匹配菜品")
+    @RateLimit(name = "ai:order", limit = 20, seconds = 300, message = "AI 点餐调用过于频繁")
     @PostMapping("/order")
     @RequiresRole(RoleEnum.STUDENT)
     public Result<AiOrderResponse> aiOrder(@RequestBody @Valid AiChatRequest request) {
@@ -68,6 +70,7 @@ public class AiController {
     }
 
     @Operation(summary = "智能客服问答", description = "多轮对话；无法回答时返回 needTicket=true 并自动建单")
+    @RateLimit(name = "ai:chat", limit = 20, seconds = 300, message = "AI 客服调用过于频繁")
     @PostMapping("/chat")
     public Result<Map<String, Object>> chat(@RequestBody @Valid AiChatRequest request) {
         return Result.ok(chatbotService.chat(UserContext.getUserId(), request));

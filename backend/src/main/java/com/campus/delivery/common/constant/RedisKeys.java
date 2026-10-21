@@ -73,4 +73,20 @@ public final class RedisKeys {
 
     /** 推荐结果缓存：ai:recommend:{userId}:{scene} */
     public static final String AI_RECOMMEND = "ai:recommend:";
+
+    /**
+     * 接口限流计数：rate:{name}:{subject}:{窗口序号}
+     *
+     * <p>窗口序号 = 当前秒 / 窗口长度，因此每个窗口是一个独立 key，
+     * 天然过期、不会出现「key 永不过期导致用户被永久限流」的问题。
+     */
+    public static final String RATE_LIMIT = "rate:";
+
+    /**
+     * 下单幂等键：idempotent:order:{userId}:{requestId}
+     *
+     * <p>值为 PROCESSING（处理中）或订单ID（已成功）。
+     * 重复提交时据此判断：返回原订单，或提示"请勿重复提交"。
+     */
+    public static final String IDEMPOTENT_ORDER = "idempotent:order:";
 }

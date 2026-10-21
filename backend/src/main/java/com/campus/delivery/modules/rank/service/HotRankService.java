@@ -148,6 +148,20 @@ public class HotRankService {
     }
 
     /** 搴楅摵鏁版嵁鍙樺寲鍚庤姒滃崟澶辨晥锛堜笅娆¤鍙栭噸寤猴級 */
+    /**
+     * 菜品删除后让菜品榜单失效。
+     *
+     * <p>只清详情缓存不够：ZSet 成员独立存储，菜品逻辑删除后仍会留在
+     * {@code cache:dish:hot} 里，榜单就会返回一个已查不到的菜品（score 停在删除前的值）。
+     */
+    public void invalidateDishRank() {
+        try {
+            redisTemplate.delete(List.of(RedisKeys.HOT_DISH_LIST, RedisKeys.HOT_DISH));
+        } catch (Exception e) {
+            log.warn("clear dish rank failed: {}", e.getMessage());
+        }
+    }
+
     public void invalidateShopRank() {
         try {
             redisTemplate.delete(List.of(RedisKeys.HOT_SHOP_LIST, RedisKeys.HOT_SHOP));

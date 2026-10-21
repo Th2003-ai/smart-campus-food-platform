@@ -22,8 +22,8 @@ INSERT INTO sys_user (id, username, password, role, nickname, phone, status) VAL
 ('U000000000000000000000000000003', '13700000001', '', 'RIDER',    '演示骑手', '13700000001', 1),
 ('U000000000000000000000000000004', 'admin',        '', 'ADMIN',    '系统管理员', '13600000001', 1);
 
-INSERT INTO student (id, user_id, student_no, real_name, college, grade) VALUES
-('S000000000000000000000000000001', 'U000000000000000000000000000001', '20210001', '演示学生', '计算机学院', '2021级');
+INSERT INTO student (id, user_id, student_no, real_name, college, grade, balance) VALUES
+('S000000000000000000000000000001', 'U000000000000000000000000000001', '20210001', '演示学生', '计算机学院', '2021级', 200.00);
 
 INSERT INTO diet_profile (id, user_id, diet_goal, taste_preference, allergy_foods) VALUES
 ('D000000000000000000000000000001', 'U000000000000000000000000000001', 1, '清淡,不辣', '香菜,花生');

@@ -13,6 +13,7 @@
             <el-descriptions-item label="角色">{{ profile.role || '-' }}</el-descriptions-item>
             <el-descriptions-item label="学院">{{ profile.college || '-' }}</el-descriptions-item>
             <el-descriptions-item label="年级">{{ profile.grade || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="账户余额">¥{{ money(profile.balance) }}</el-descriptions-item>
           </el-descriptions>
           <el-button class="mt" type="danger" plain @click="onLogout">退出登录</el-button>
         </el-tab-pane>
@@ -151,7 +152,7 @@ import {
   type UserProfile
 } from '@/api/user'
 import { useUserStore } from '@/store/user'
-import { joinAddress } from '@/utils/dict'
+import { joinAddress, money } from '@/utils/dict'
 
 const router = useRouter()
 const userStore = useUserStore()

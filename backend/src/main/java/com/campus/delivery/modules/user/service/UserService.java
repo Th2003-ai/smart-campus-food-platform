@@ -57,6 +57,8 @@ public class UserService {
             vo.setStudentNo(student.getStudentNo());
             vo.setCollege(student.getCollege());
             vo.setGrade(student.getGrade());
+            // 余额直接从数据库读，不进 Redis：金额属于「绝不能错」的数据
+            vo.setBalance(student.getBalance());
         }
 
         DietProfile profile = getOrCreateDietProfile(userId);

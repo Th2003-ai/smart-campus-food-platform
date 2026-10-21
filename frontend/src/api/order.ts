@@ -64,8 +64,18 @@ export interface CreateOrderParams {
 }
 
 /** 学生端 */
-export function createOrder(data: CreateOrderParams) {
-  return post<OrderVO>('/orders', data)
+
+/**
+ * 提交订单。
+ *
+ * @param data      下单参数
+ * @param requestId 幂等键（进入结算页时生成一次）。同一个 requestId 重复提交，
+ *                  后端只会创建一单，并把已创建的订单原样返回。
+ */
+export function createOrder(data: CreateOrderParams, requestId?: string) {
+  return post<OrderVO>('/orders', data, {
+    headers: requestId ? { 'X-Request-Id': requestId } : undefined
+  })
 }
 
 export function listMyOrders(params?: { status?: number; pageNum?: number; pageSize?: number }) {

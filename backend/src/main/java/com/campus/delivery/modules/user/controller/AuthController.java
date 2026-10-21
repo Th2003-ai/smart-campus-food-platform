@@ -1,5 +1,7 @@
 package com.campus.delivery.modules.user.controller;
 
+import com.campus.delivery.common.annotation.LimitBy;
+import com.campus.delivery.common.annotation.RateLimit;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.user.dto.LoginRequest;
 import com.campus.delivery.modules.user.dto.LoginResponse;
@@ -27,6 +29,8 @@ public class AuthController {
     private final AuthService authService;
 
     @Operation(summary = "登录", description = "学生/商户/骑手/管理员统一入口")
+    @RateLimit(name = "auth:login", limit = 5, seconds = 60, by = LimitBy.IP,
+            message = "登录尝试过于频繁")
     @PostMapping("/login")
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         return Result.ok(authService.login(request));

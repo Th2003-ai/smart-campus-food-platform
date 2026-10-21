@@ -17,6 +17,8 @@ export interface UserProfile {
   dietGoal?: number
   tastePreference?: string
   allergyFoods?: string
+  /** 账户余额（仅学生；余额支付用，金额只以数据库为准） */
+  balance?: number
 }
 
 /**

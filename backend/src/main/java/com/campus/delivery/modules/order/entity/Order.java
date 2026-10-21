@@ -60,6 +60,15 @@ public class Order implements Serializable {
 
     private String remark;
 
+    /**
+     * 客户端请求号（下单幂等键）。
+     *
+     * <p>同一个用户 + 同一个 requestId 只允许产生一条订单，
+     * 由数据库唯一索引 {@code uk_user_request (user_id, request_id)} 兜底：
+     * 即使 Redis 幂等键没拦住（并发/缓存故障），第二次插入也会失败。
+     */
+    private String requestId;
+
     private String pickupCode;
 
     private String cancelReason;

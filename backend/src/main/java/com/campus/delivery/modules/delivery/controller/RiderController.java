@@ -1,5 +1,6 @@
 package com.campus.delivery.modules.delivery.controller;
 
+import com.campus.delivery.common.annotation.RateLimit;
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.delivery.entity.Rider;
@@ -43,6 +44,7 @@ public class RiderController {
     }
 
     @Operation(summary = "抢单", description = "Redis 分布式锁 + 数据库条件更新，保证同一订单只有一个骑手抢到")
+    @RateLimit(name = "rider:grab", limit = 30, seconds = 60, message = "抢单操作过于频繁")
     @PostMapping("/grab/{orderId}")
     public Result<Order> grab(@PathVariable String orderId) {
         return Result.ok(deliveryService.grab(currentRiderId(), orderId));

@@ -227,6 +227,8 @@ public class DishService {
         Dish dish = requireOwnDish(dishId, shopService.currentShopId());
         dishMapper.deleteById(dish.getId());
         evictCache(dishId);
+        // 榜单 ZSet 里的成员不会随菜品删除自动消失，必须主动失效，否则榜单会出现已删除菜品
+        hotRankService.invalidateDishRank();
         log.info("菜品已删除(逻辑删除): dishId={}, shopId={}", dishId, dish.getShopId());
     }
 

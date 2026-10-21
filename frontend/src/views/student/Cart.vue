@@ -107,6 +107,17 @@
           </el-radio-group>
         </el-form-item>
 
+        <el-form-item label="支付方式">
+          <el-radio-group v-model="payType">
+            <el-radio :value="1">余额支付</el-radio>
+            <el-radio :value="2">模拟第三方</el-radio>
+          </el-radio-group>
+          <span v-if="payType === 1" class="balance-hint" :class="{ short: balance < payableAmount }">
+            当前余额 ¥{{ money(balance) }}
+            <template v-if="balance < payableAmount">（不足，请改用模拟第三方或先充值）</template>
+          </span>
+        </el-form-item>
+
         <el-form-item label="备注">
           <el-input v-model="remark" maxlength="255" placeholder="选填，如少放辣、放门口" />
         </el-form-item>
@@ -142,7 +153,7 @@ import {
 } from '@/api/cart'
 import { createOrder } from '@/api/order'
 import { getShopDetail, type Shop } from '@/api/shop'
-import { listAddress, type UserAddress } from '@/api/user'
+import { listAddress, getProfile, type UserAddress } from '@/api/user'
 import { useCartStore } from '@/store/cart'
 import { joinAddress, money } from '@/utils/dict'
 import { dishCover } from '@/utils/image'
@@ -158,6 +169,21 @@ const submitting = ref(false)
 const selectedAddressId = ref<string>('')
 const deliveryType = ref(1)
 const remark = ref('')
+/** 支付方式：1 余额（扣 student.balance） / 2 模拟第三方（不动余额） */
+const payType = ref(1)
+/** 学生余额，来自 /user/profile（金额只以数据库为准） */
+const balance = ref(0)
+/** 下单幂等键：进入结算页时生成一次，重复提交同一个键后端只会创建一单 */
+const requestId = ref('')
+
+/** 生成幂等键：优先用 crypto.randomUUID，老浏览器退化为时间戳+随机数 */
+function newRequestId(): string {
+  const c = globalThis.crypto
+  if (c && typeof c.randomUUID === 'function') {
+    return c.randomUUID()
+  }
+  return `req-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
+}
 
 const shopName = computed(() => cartStore.items[0]?.shopName || shop.value?.shopName || '')
 const minPrice = computed(() => shop.value?.minPrice ?? 0)
@@ -236,12 +262,21 @@ async function onClear() {
 async function openCheckout() {
   deliveryType.value = shop.value?.deliveryFee ? 1 : 2
   remark.value = ''
+  payType.value = 1
+  // 每次进入结算页生成一个幂等键：重复提交同一个键，后端只会创建一单
+  requestId.value = newRequestId()
   try {
     addresses.value = await listAddress()
     const preferred = addresses.value.find((a) => a.isDefault) || addresses.value[0]
     selectedAddressId.value = (preferred?.id as string) || ''
   } catch {
     addresses.value = []
+  }
+  try {
+    const profile = await getProfile()
+    balance.value = Number(profile.balance ?? 0)
+  } catch {
+    balance.value = 0
   }
   dialogVisible.value = true
 }
@@ -254,21 +289,26 @@ async function onSubmit() {
   }
   submitting.value = true
   try {
-    await createOrder({
-      deliveryType: deliveryType.value,
-      // 后端 createOrder 直接置为已支付，payType 只做记录
-      payType: 1,
-      receiver: address.receiver,
-      receiverPhone: address.phone,
-      address: joinAddress(address),
-      remark: remark.value.trim() || undefined
-    })
+    await createOrder(
+      {
+        deliveryType: deliveryType.value,
+        // 1 余额（后端扣 student.balance，不足会拒单） / 2 模拟第三方
+        payType: payType.value,
+        receiver: address.receiver,
+        receiverPhone: address.phone,
+        address: joinAddress(address),
+        remark: remark.value.trim() || undefined
+      },
+      requestId.value || undefined
+    )
+    // 下单成功：作废本次幂等键，下次进入结算页会重新生成
+    requestId.value = ''
     ElMessage.success('下单成功')
     dialogVisible.value = false
     await cartStore.refresh()
     router.push('/student/orders')
   } catch {
-    // 库存不足等业务错误由拦截器提示
+    // 库存不足等业务错误由拦截器提示；requestId 保留，重试时仍受幂等保护
   } finally {
     submitting.value = false
   }
@@ -374,6 +414,14 @@ async function onSubmit() {
 .gap {
   font-size: 12px;
   color: #e6a23c;
+}
+.balance-hint {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #909399;
+}
+.balance-hint.short {
+  color: #f56c6c;
 }
 .addr-group {
   display: flex;

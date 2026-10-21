@@ -42,6 +42,17 @@ public final class UserContext {
         return require().getUserId();
     }
 
+    /**
+     * 获取当前登录人ID，未登录返回 null。
+     *
+     * <p>给「登录不是必需」的场景用，例如限流按用户计数：
+     * 拿不到用户就回退成按 IP 计数，而不是抛 401。
+     */
+    public static String getUserIdOrNull() {
+        LoginUser user = HOLDER.get();
+        return user == null ? null : user.getUserId();
+    }
+
     public static String getRole() {
         return require().getRole();
     }

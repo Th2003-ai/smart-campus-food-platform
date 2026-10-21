@@ -3,6 +3,7 @@ package com.campus.delivery.modules.order.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.delivery.common.api.PageResult;
+import com.campus.delivery.common.api.ResultCode;
 import com.campus.delivery.common.constant.RedisKeys;
 import com.campus.delivery.common.enums.CommonEnums;
 import com.campus.delivery.common.enums.OrderStatus;
@@ -25,12 +26,14 @@ import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.websocket.OrderNotifyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -76,19 +79,97 @@ public class OrderService {
     private final StringRedisTemplate stringRedisTemplate;
     /** 超时未接单延时队列（Redis ZSet），下单入队、接单/取消出队 */
     private final OrderTimeoutQueue orderTimeoutQueue;
+    /** 模拟支付：扣余额 / 退款 / 写 payment_record */
+    private final com.campus.delivery.modules.payment.service.PaymentService paymentService;
 
     // ==================================================================
     // 学生端
     // ==================================================================
 
     /**
-     * 提交订单（购物车结算 + 模拟支付）。
+     * 提交订单（兼容入口：不带幂等键）。
      *
-     * <p>TODO(成员4)：把模拟支付落库到 {@code payment_record}，
-     * 余额支付需扣减 {@code student.balance} 并做余额充足校验。
+     * <p>老前端或脚本调用这个重载时不启用幂等保护；
+     * 前端正常提交请走带 {@code requestId} 的重载。
      */
     @Transactional(rollbackFor = Exception.class)
     public OrderVO createOrder(String userId, CreateOrderRequest request) {
+        return createOrder(userId, request, null);
+    }
+
+    /**
+     * 提交订单（购物车结算 + 模拟支付），带下单幂等保护。
+     *
+     * <p>三层防护，从快到慢：
+     * <ol>
+     *   <li><b>Redis 幂等键</b>：{@code SET idempotent:order:{userId}:{requestId} NX EX 300}。
+     *       抢到 → 处理；没抢到 → 若值已是订单ID，直接把原订单返回（重复请求得到同一结果）；
+     *       值仍是 PROCESSING 说明上一请求还在跑，提示"请勿重复提交"。</li>
+     *   <li><b>数据库唯一索引</b>：{@code uk_user_request (user_id, request_id)}。
+     *       Redis 不可用或并发穿透时，第二次插入会抛 {@link DuplicateKeyException}，
+     *       转成友好提示而不是 500。</li>
+     *   <li><b>状态机语义幂等</b>：取消/取餐等后续操作本身有状态前置校验，重复调用不会重复执行。</li>
+     * </ol>
+     *
+     * <p>失败时释放 Redis 键，避免用户因为一次失败（如库存不足）被锁 5 分钟。
+     *
+     * @param requestId 客户端请求号（前端进入结算页时生成，随 X-Request-Id 传入）；为空则不启用幂等
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public OrderVO createOrder(String userId, CreateOrderRequest request, String requestId) {
+        boolean idempotent = requestId != null && !requestId.isBlank();
+        String idemKey = idempotent ? RedisKeys.IDEMPOTENT_ORDER + userId + ":" + requestId : null;
+
+        if (idempotent) {
+            Boolean acquired;
+            try {
+                acquired = stringRedisTemplate.opsForValue()
+                        .setIfAbsent(idemKey, "PROCESSING", Duration.ofMinutes(5));
+            } catch (Exception e) {
+                // 幂等组件异常不能阻断下单：退化为只靠数据库唯一索引兜底
+                log.warn("幂等键写入失败，本次跳过 Redis 幂等: key={}, err={}", idemKey, e.getMessage());
+                acquired = Boolean.TRUE;
+                idemKey = null;
+            }
+            if (!Boolean.TRUE.equals(acquired)) {
+                String cached = stringRedisTemplate.opsForValue().get(idemKey);
+                if (cached != null && !"PROCESSING".equals(cached)) {
+                    Order existed = orderMapper.selectById(cached);
+                    if (existed != null) {
+                        log.info("幂等命中，返回已创建订单: userId={}, requestId={}, orderId={}",
+                                userId, requestId, cached);
+                        return buildOrderVO(existed, listItems(existed.getId()));
+                    }
+                }
+                throw new BusinessException(ResultCode.CONFLICT.getCode(), "请求正在处理中，请勿重复提交");
+            }
+        }
+
+        try {
+            OrderVO vo = doCreateOrder(userId, request, requestId);
+            if (idemKey != null) {
+                stringRedisTemplate.opsForValue()
+                        .set(idemKey, vo.getOrder().getId(), Duration.ofMinutes(5));
+            }
+            return vo;
+        } catch (DuplicateKeyException e) {
+            log.warn("重复提交被数据库唯一索引拦截: userId={}, requestId={}", userId, requestId);
+            throw new BusinessException(ResultCode.CONFLICT.getCode(), "该订单已提交，请勿重复提交");
+        } catch (RuntimeException e) {
+            // 业务失败（库存不足等）释放幂等键，允许用户修正后重试
+            if (idemKey != null) {
+                try {
+                    stringRedisTemplate.delete(idemKey);
+                } catch (Exception ignore) {
+                    // 释放失败最多等 5 分钟自动过期
+                }
+            }
+            throw e;
+        }
+    }
+
+    /** 真正的下单逻辑（由带幂等保护的 createOrder 调用） */
+    private OrderVO doCreateOrder(String userId, CreateOrderRequest request, String requestId) {
         List<CartItem> cartItems = cartService.listSelected(userId);
         if (cartItems.isEmpty()) {
             throw new BusinessException(CODE_CART_EMPTY, "购物车中没有已勾选的商品");
@@ -144,6 +225,8 @@ public class OrderService {
         order.setReceiverPhone(request.getReceiverPhone());
         order.setAddress(request.getAddress());
         order.setRemark(request.getRemark());
+        // 幂等键落库：与 Redis 键、唯一索引共同构成三层防护
+        order.setRequestId(requestId);
         order.setVersion(0);
         orderMapper.insert(order);
 
@@ -152,6 +235,9 @@ public class OrderService {
             orderItem.setOrderId(order.getId());
             orderItemMapper.insert(orderItem);
         }
+
+        // 3.5) 收款：余额支付扣 student.balance（不足则抛异常回滚整单），并写 payment_record
+        paymentService.charge(order, userId);
 
         // 4) 初始状态流转记录
         OrderStatusLog statusLog = new OrderStatusLog();
@@ -216,7 +302,8 @@ public class OrderService {
         // 已取消，不再需要超时扫描
         orderTimeoutQueue.remove(orderId);
         restoreStock(orderId);
-        // TODO(成员4)：模拟支付退款，把 pay_status 置为已退款并写 payment_record
+        // 退款：条件更新 pay_status 1→2 抢到退款权才回补余额，天然防重复退款
+        paymentService.refund(order, reason);
         orderNotifyHandler.sendToUser(userId, "ORDER_STATUS", statusPayload(order));
     }
 
@@ -240,6 +327,7 @@ public class OrderService {
         }
         order = orderStateMachine.transit(order, OrderStatus.CANCELED, "SYSTEM", "SYSTEM", reason);
         restoreStock(orderId);
+        paymentService.refund(order, reason);
         notifyOrderStatus(order, before);
         log.warn("系统自动取消超时订单: orderId={}, reason={}", orderId, reason);
         return true;
@@ -297,7 +385,7 @@ public class OrderService {
         // 拒单：回补库存并退款
         if (targetStatus == OrderStatus.CANCELED) {
             restoreStock(orderId);
-            // TODO(成员4)：模拟支付退款，把 pay_status 置为已退款
+            paymentService.refund(order, reason);
         }
 
         notifyOrderStatus(order, before);

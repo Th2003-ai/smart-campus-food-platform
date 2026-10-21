@@ -1,6 +1,7 @@
 package com.campus.delivery.config;
 
 import com.campus.delivery.security.AuthInterceptor;
+import com.campus.delivery.security.RateLimitInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +20,7 @@ import java.util.List;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
+    private final RateLimitInterceptor rateLimitInterceptor;
 
     @Value("${campus.cors.allowed-origins}")
     private List<String> allowedOrigins;
@@ -49,9 +51,15 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 顺序很重要：先鉴权（写入 UserContext），再限流（按用户ID计数时要用到）
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/**")
-                .excludePathPatterns(PUBLIC_PATHS);
+                .excludePathPatterns(PUBLIC_PATHS)
+                .order(1);
+        // 限流对全路径生效（包括登录这类公开接口），具体是否限流由 @RateLimit 决定
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns("/**")
+                .order(2);
     }
 
     @Override

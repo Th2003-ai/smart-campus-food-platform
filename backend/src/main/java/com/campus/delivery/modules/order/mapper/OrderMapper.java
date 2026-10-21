@@ -5,6 +5,7 @@ import com.campus.delivery.modules.order.entity.Order;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 import java.util.Map;
@@ -53,4 +54,17 @@ public interface OrderMapper extends BaseMapper<Order> {
             + "IFNULL(SUM(CASE WHEN order_status = 4 THEN total_amount ELSE 0 END), 0) AS totalSales "
             + "FROM orders WHERE shop_id = #{shopId}")
     Map<String, Object> statShopOverview(@Param("shopId") String shopId);
+
+    /**
+     * 把订单标记为已退款（退款闸门）。
+     *
+     * <p>用条件更新而不是「先查后改」：只有 {@code pay_status} 还是 1（已支付）时才会
+     * 成功改成 2（已退款）；影响行数为 0 说明已经退过款。
+     * 这样即使退款被重复调用（学生取消与超时任务同时触发），也不会重复给学生加钱。
+     *
+     * @return 影响行数，1 表示本次抢到了退款权
+     */
+    @Update("UPDATE orders SET pay_status = 2, update_time = NOW() "
+            + "WHERE id = #{orderId} AND pay_status = 1")
+    int markRefunded(@Param("orderId") String orderId);
 }

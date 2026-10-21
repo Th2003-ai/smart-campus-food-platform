@@ -1,5 +1,6 @@
 package com.campus.delivery.modules.order.controller;
 
+import com.campus.delivery.common.annotation.RateLimit;
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.order.dto.CreateOrderRequest;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,10 +33,12 @@ public class OrderController {
     private final OrderService orderService;
 
     @Operation(summary = "提交订单", description = "购物车结算 + 模拟支付")
+    @RateLimit(name = "order:create", limit = 10, seconds = 60, message = "下单过于频繁")
     @PostMapping
     @RequiresRole(RoleEnum.STUDENT)
-    public Result<OrderVO> create(@RequestBody CreateOrderRequest request) {
-        return Result.ok(orderService.createOrder(UserContext.getUserId(), request));
+    public Result<OrderVO> create(@RequestBody CreateOrderRequest request,
+                                  @RequestHeader(value = "X-Request-Id", required = false) String requestId) {
+        return Result.ok(orderService.createOrder(UserContext.getUserId(), request, requestId));
     }
 
     @Operation(summary = "我的订单列表", description = "可按状态筛选")
