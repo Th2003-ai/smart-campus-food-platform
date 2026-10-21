@@ -17,6 +17,7 @@ import com.campus.delivery.modules.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -59,6 +60,8 @@ public class DeliveryService {
     private final UserService userService;
     private final RiderOnlineService riderOnlineService;
     private final RedisTemplate<String, Object> redisTemplate;
+    /** 抢单池 ZSet 的 member 是订单ID，用纯字符串序列化便于排查 */
+    private final StringRedisTemplate stringRedisTemplate;
 
     /** 订单大厅：可抢订单列表 */
     public PageResult<Order> orderHall(long pageNum, long pageSize) {
@@ -106,7 +109,7 @@ public class DeliveryService {
             return order;
         } catch (BusinessException e) {
             // 抢单失败时把订单重新放回抢单池，避免被锁期间其他人也抢不到
-            redisTemplate.opsForZSet().add(RedisKeys.GRAB_POOL, orderId, System.currentTimeMillis());
+            stringRedisTemplate.opsForZSet().add(RedisKeys.GRAB_POOL, orderId, System.currentTimeMillis());
             throw e;
         } finally {
             redisTemplate.delete(lockKey);
@@ -129,6 +132,12 @@ public class DeliveryService {
     /** 确认送达：订单完成，骑手配送中数量 -1、收入累加，更新配送记录 */
     @Transactional(rollbackFor = Exception.class)
     public Order deliver(String riderId, String orderId) {
+        // 「待取餐 → 已完成」这条边是留给自取单的（见 OrderStatus#allowedNext），
+        // 配送单必须按「取餐 → 送达」走，否则骑手可以跳过取餐直接送达。
+        Order current = orderService.requireOrder(orderId);
+        if (!OrderStatus.DELIVERING.equals(OrderStatus.of(current.getOrderStatus()))) {
+            throw new BusinessException(40010, "请先确认取餐再点送达");
+        }
         Order order = orderService.riderTransit(orderId, riderId, OrderStatus.FINISHED);
         riderMapper.decreaseDelivering(riderId, order.getDeliveryFee() == null
                 ? BigDecimal.ZERO : order.getDeliveryFee());

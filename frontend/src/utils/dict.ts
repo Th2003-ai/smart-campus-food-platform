@@ -48,6 +48,19 @@ export function deliveryTypeText(type?: number): string {
   return type === 2 ? '宿舍楼下自取' : '骑手配送'
 }
 
+/** 是否自取单：自取没有骑手环节，步骤条与操作按钮都要区别对待 */
+export function isSelfPickup(type?: number): boolean {
+  return type === 2
+}
+
+/**
+ * 是否可确认取餐：仅自取单、且处于「待取餐」。
+ * 学生和商户都能点，具体谁有权由后端按登录角色校验。
+ */
+export function canConfirmPickup(deliveryType?: number, orderStatus?: number): boolean {
+  return isSelfPickup(deliveryType) && orderStatus === 2
+}
+
 /** 支付状态：0 未支付 1 已支付 2 已退款 */
 export function payStatusText(status?: number): string {
   if (status === 1) return '已支付'

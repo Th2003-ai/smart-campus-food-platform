@@ -26,6 +26,7 @@ import com.campus.delivery.websocket.OrderNotifyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -71,6 +72,10 @@ public class OrderService {
     private final ShopService shopService;
     private final OrderNotifyHandler orderNotifyHandler;
     private final RedisTemplate<String, Object> redisTemplate;
+    /** ZSet 类结构（抢单池）用纯字符串序列化，member 就是订单ID */
+    private final StringRedisTemplate stringRedisTemplate;
+    /** 超时未接单延时队列（Redis ZSet），下单入队、接单/取消出队 */
+    private final OrderTimeoutQueue orderTimeoutQueue;
 
     // ==================================================================
     // 学生端
@@ -164,6 +169,9 @@ public class OrderService {
         // 6) 实时通知商户有新订单
         notifyMerchantNewOrder(shopId, order);
 
+        // 7) 放入超时未接单延时队列：到期后若仍是「待接单」，由 OrderTimeoutSweeper 自动取消
+        orderTimeoutQueue.enqueue(order.getId());
+
         log.info("订单创建成功: orderNo={}, userId={}, amount={}", order.getOrderNo(), userId, order.getTotalAmount());
         return buildOrderVO(order, orderItems);
     }
@@ -205,9 +213,36 @@ public class OrderService {
             throw new BusinessException(CODE_CANNOT_CANCEL, "订单已被商家接单，无法直接取消，请联系商家或提交客服工单");
         }
         orderStateMachine.transit(order, OrderStatus.CANCELED, userId, RoleEnum.STUDENT.getCode(), reason);
+        // 已取消，不再需要超时扫描
+        orderTimeoutQueue.remove(orderId);
         restoreStock(orderId);
         // TODO(成员4)：模拟支付退款，把 pay_status 置为已退款并写 payment_record
         orderNotifyHandler.sendToUser(userId, "ORDER_STATUS", statusPayload(order));
+    }
+
+    /**
+     * 系统自动取消超时未接单的订单（供 {@code OrderTimeoutSweeper} 调用）。
+     *
+     * <p>只在订单仍处于「待接单」时执行，避免把商户已接单的订单误取消
+     * —— 延时队列里的成员可能在到期前就已经被接单出队，这里再校验一次状态。
+     *
+     * @return true 表示本次确实取消了订单
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean systemCancelIfPending(String orderId, String reason) {
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) {
+            return false;
+        }
+        OrderStatus before = OrderStatus.of(order.getOrderStatus());
+        if (before != OrderStatus.PENDING_ACCEPT) {
+            return false;
+        }
+        order = orderStateMachine.transit(order, OrderStatus.CANCELED, "SYSTEM", "SYSTEM", reason);
+        restoreStock(orderId);
+        notifyOrderStatus(order, before);
+        log.warn("系统自动取消超时订单: orderId={}, reason={}", orderId, reason);
+        return true;
     }
 
     // ==================================================================
@@ -257,6 +292,8 @@ public class OrderService {
             orderMapper.updateById(order);
             pushToGrabPool(order);
         }
+        // 商户已接单/拒单：订单离开「待接单」，从超时队列移除，避免被自动取消
+        orderTimeoutQueue.remove(orderId);
         // 拒单：回补库存并退款
         if (targetStatus == OrderStatus.CANCELED) {
             restoreStock(orderId);
@@ -288,6 +325,61 @@ public class OrderService {
             removeFromGrabPool(orderId);
         }
         notifyOrderStatus(order, before);
+        return order;
+    }
+
+    // ==================================================================
+    // 自取订单：最后一公里（学生或商户确认取餐）
+    // ==================================================================
+
+    /**
+     * 自取订单确认取餐（2 待取餐 → 4 已完成）。
+     *
+     * <p>为什么需要这个接口：自取订单不进抢单池（{@link #pushToGrabPool} 对
+     * deliveryType=2 直接返回），所以没有骑手来完成「取餐 → 送达」；
+     * 而 {@link #merchantTransit} 又不允许商户把订单置为已完成。
+     * 缺少这条路径时，自取订单会永久停在「待取餐」，学生也永远无法评价
+     * （{@code ReviewService} 要求订单已完成）。
+     *
+     * <p>为什么学生和商户都能点：现实中商家忙起来可能来不及点确认，
+     * 允许学生自助确认可避免订单卡死。谁先点谁生效，
+     * 后点的一方会收到「订单当前为「已完成」」的提示，不会重复完成。
+     *
+     * <p>权限：学生只能确认自己的订单，商户只能确认本店订单（店铺从登录态解析，不接受前端传参）。
+     *
+     * @param orderId      订单ID
+     * @param operatorId   操作人ID（学生ID，或商户的 sys_user.id）
+     * @param operatorRole 操作人角色：STUDENT / MERCHANT
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Order confirmSelfPickup(String orderId, String operatorId, String operatorRole) {
+        Order order = requireOrder(orderId);
+        if (!Integer.valueOf(2).equals(order.getDeliveryType())) {
+            throw new BusinessException(30030, "该订单为骑手配送，请由骑手完成送达");
+        }
+
+        if (RoleEnum.STUDENT.getCode().equalsIgnoreCase(operatorRole)) {
+            if (!operatorId.equals(order.getUserId())) {
+                throw new BusinessException(CODE_NO_PERMISSION, "无权操作他人的订单");
+            }
+        } else if (RoleEnum.MERCHANT.getCode().equalsIgnoreCase(operatorRole)) {
+            if (!shopService.currentShopId().equals(order.getShopId())) {
+                throw new BusinessException(CODE_NO_PERMISSION, "无权操作其他店铺的订单");
+            }
+        } else {
+            throw new BusinessException(CODE_NO_PERMISSION, "只有下单学生或店铺商户可以确认取餐");
+        }
+
+        OrderStatus before = OrderStatus.of(order.getOrderStatus());
+        if (before != OrderStatus.PENDING_PICKUP) {
+            throw new BusinessException(30031,
+                    "订单当前为「" + before.getDesc() + "」，只有「待取餐」可以确认取餐");
+        }
+
+        order = orderStateMachine.transit(order, OrderStatus.FINISHED, operatorId, operatorRole,
+                "自取订单确认取餐");
+        notifyOrderStatus(order, before);
+        log.info("自取订单完成: orderId={}, operator={}({})", orderId, operatorId, operatorRole);
         return order;
     }
 
@@ -455,12 +547,13 @@ public class OrderService {
         if (!Integer.valueOf(1).equals(order.getDeliveryType())) {
             return; // 自取订单不进入抢单池
         }
-        redisTemplate.opsForZSet().add(RedisKeys.GRAB_POOL, order.getId(),
+        // 用 StringRedisTemplate：member 就是订单ID，纯字符串才便于 redis-cli 排查
+        stringRedisTemplate.opsForZSet().add(RedisKeys.GRAB_POOL, order.getId(),
                 System.currentTimeMillis());
         orderNotifyHandler.broadcastToRole(RoleEnum.RIDER.getCode(), "GRAB_ORDER", statusPayload(order));
     }
 
     private void removeFromGrabPool(String orderId) {
-        redisTemplate.opsForZSet().remove(RedisKeys.GRAB_POOL, orderId);
+        stringRedisTemplate.opsForZSet().remove(RedisKeys.GRAB_POOL, orderId);
     }
 }

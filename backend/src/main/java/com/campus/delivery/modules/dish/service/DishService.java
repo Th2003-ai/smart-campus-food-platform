@@ -211,8 +211,26 @@ public class DishService {
         hotRankService.touchDishRank(dish);
     }
 
-    /** 菜品分类列表 */
-    public List<DishCategory> listCategories(String shopId) {
+    /**
+     * 删除菜品（逻辑删除）。
+     *
+     * <p>此前缺少这个方法，商户端「删除菜品」按钮点了只会拿到 404。
+     *
+     * <p>dish 表有 {@code @TableLogic deleted} 字段，{@code deleteById} 实际是把
+     * deleted 置 1，不会物理删除；历史订单里的 order_item 是成交快照，
+     * 因此删菜不会影响已下单的订单展示。
+     *
+     * <p>权限：只能删本店菜品（店铺由登录态解析）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void removeDish(String dishId) {
+        Dish dish = requireOwnDish(dishId, shopService.currentShopId());
+        dishMapper.deleteById(dish.getId());
+        evictCache(dishId);
+        log.info("菜品已删除(逻辑删除): dishId={}, shopId={}", dishId, dish.getShopId());
+    }
+
+    /** 菜品分类列表 */    public List<DishCategory> listCategories(String shopId) {
         return dishCategoryMapper.selectList(new LambdaQueryWrapper<DishCategory>()
                 .eq(DishCategory::getShopId, shopId)
                 .orderByAsc(DishCategory::getSort));

@@ -82,6 +82,16 @@ export function cancelOrder(id: string, reason?: string) {
   return post<void>(`/orders/${id}/cancel${q}`)
 }
 
+/**
+ * 自取订单确认取餐（2 待取餐 → 4 已完成）。
+ *
+ * 学生和商户共用这一接口：学生只能确认自己的订单，商户只能确认本店订单，
+ * 服务端按登录角色校验，谁先点谁生效。仅对 deliveryType=2（自取）有效。
+ */
+export function confirmSelfPickup(id: string) {
+  return post<void>(`/orders/${id}/pickup`)
+}
+
 /** 商户端 */
 export function listShopOrders(params?: { status?: number; pageNum?: number; pageSize?: number }) {
   return get<PageResult<OrderVO>>('/merchant/orders', params)
