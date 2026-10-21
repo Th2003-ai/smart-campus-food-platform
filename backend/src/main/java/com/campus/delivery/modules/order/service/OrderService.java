@@ -630,6 +630,14 @@ public class OrderService {
         return payload;
     }
 
+    // ------------------------------------------------------------------
+    // 场景 4（PPT 第 13 页）：骑手抢单池
+    //   结构：ZSet —— delivery:grab:pool，member = 订单 ID，score = 出餐时间戳
+    //   为什么不设 TTL：池子靠业务事件增删，有单就留着，不能自己过期
+    //   一致性：以数据库为准 —— 大厅列表实际查的是 rider_id IS NULL 的订单，
+    //           Redis 只负责「快速筛出哪些单可抢」，即使池子脏了也不影响正确性
+    //   出餐时 ZADD，抢单成功 / 接单 / 取消时 ZREM
+    // ------------------------------------------------------------------
     /** 订单进入骑手抢单池（Redis 有序集合，避免高频读压库） */
     private void pushToGrabPool(Order order) {
         if (!Integer.valueOf(1).equals(order.getDeliveryType())) {

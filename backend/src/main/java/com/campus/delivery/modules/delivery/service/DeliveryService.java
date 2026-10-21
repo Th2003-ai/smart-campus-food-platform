@@ -91,7 +91,16 @@ public class DeliveryService {
         }
     }
 
-    /** 抢单 */
+    // ------------------------------------------------------------------
+    // 场景 3（PPT 第 13、19 页）：抢单分布式锁
+    //   结构：String —— lock:order:grab:{orderId}，value 存抢到的骑手 ID
+    //   过期：10 秒（TTL 到点自动释放，防进程崩溃造成死锁）
+    //   写法：SET key value NX EX 10 —— 一条命令完成「不存在才设置 + 带过期」
+    //   正确性：锁只负责减少并发冲突，最终由数据库兜底——
+    //           订单状态必须「待取餐」+ rider_id IS NULL + 乐观锁 version
+    // ------------------------------------------------------------------
+
+    /** 抢单分布式锁 */
     @Transactional(rollbackFor = Exception.class)
     public Order grab(String riderId, String orderId) {
         String lockKey = RedisKeys.LOCK_ORDER_GRAB + orderId;

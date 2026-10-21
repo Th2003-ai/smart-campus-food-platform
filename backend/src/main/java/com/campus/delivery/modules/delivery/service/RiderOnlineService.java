@@ -35,6 +35,14 @@ public class RiderOnlineService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final RiderMapper riderMapper;
 
+    // ------------------------------------------------------------------
+    // 场景 9（PPT 第 13、17 页）：骑手在线状态
+    //   结构：String —— rider:online:{riderId}，value = 最后一次心跳的毫秒时间戳
+    //   过期：60 秒（键的有效期就是「离线判定窗口」）
+    //   核心技巧：不存「在线 / 离线」布尔值，而是让 TTL 承担离线判定——
+    //           骑手进程崩溃或断网时不会主动上报下线，靠键自然过期即可
+    //   对比：如果用数据库字段，就得跑定时任务扫「多久没心跳」，代价高得多
+    // ------------------------------------------------------------------
     /**
      * 标记骑手在线（WebSocket 连接建立 / 收到心跳时调用）。
      *

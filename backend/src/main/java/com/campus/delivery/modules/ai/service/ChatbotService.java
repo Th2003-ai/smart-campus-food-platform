@@ -175,6 +175,15 @@ public class ChatbotService {
     // 上下文（Redis 滑动窗口）
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // 场景 6（PPT 第 13 页）：客服多轮对话上下文
+    //   结构：String(JSON 数组) —— ai:chat:context:{sessionId}
+    //         逻辑上是「滑动窗口」，只保留最近 N 轮；注意 Redis 里存的是序列化字符串，
+    //         不是 Redis 原生 List，所以不能用 LRANGE 分片读。
+    //   过期：60 分钟（会话过期就重开，丢了也不影响业务）
+    //   为什么放 Redis：对话状态不属于「绝不能丢」的数据，放内存库 + TTL 最省事
+    // ------------------------------------------------------------------
+
     @SuppressWarnings("unchecked")
     private List<String> loadContext(String sessionId) {
         Object cached = redisTemplate.opsForValue().get(RedisKeys.AI_CHAT_CONTEXT + sessionId);

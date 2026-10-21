@@ -61,6 +61,12 @@ public class ShopService {
         return PageResult.of(page.getTotal(), page.getCurrent(), page.getSize(), page.getRecords());
     }
 
+    // ------------------------------------------------------------------
+    // 场景 2（PPT 第 13 页）：店铺详情缓存
+    //   结构：String(JSON) —— cache:shop:detail:{shopId}
+    //   过期：10 分钟固定（店铺信息变更不频繁，没做抖动）
+    //   一致性：写后删缓存；店铺改资料 / 开关营业时主动失效
+    // ------------------------------------------------------------------
     /** 店铺详情（热点缓存，减少数据库压力） */
     public Shop getDetail(String shopId) {
         String cacheKey = RedisKeys.SHOP_DETAIL + shopId;
