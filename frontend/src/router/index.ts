@@ -236,6 +236,12 @@ const routes: RouteRecordRaw[] = [
         name: 'AdminConfig',
         component: () => import('@/views/admin/Config.vue'),
         meta: { title: '系统配置' }
+      },
+      {
+        path: 'menu',
+        name: 'AdminMenuTree',
+        component: () => import('@/views/admin/MenuTree.vue'),
+        meta: { title: '菜单权限树' }
       }
     ]
   },
