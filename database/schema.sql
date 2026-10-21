@@ -623,6 +623,25 @@ CREATE TABLE banner (
     PRIMARY KEY (id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='首页轮播图表';
 
+-- 系统菜单权限表（树形结构：parent_id 自引用，目录→菜单→按钮 三层。任务2：树形数据结构可视化）
+CREATE TABLE sys_menu (
+    id           VARCHAR(32) NOT NULL COMMENT '菜单ID',
+    parent_id    VARCHAR(32) NOT NULL DEFAULT '0' COMMENT '父菜单ID，0表示根节点',
+    menu_name    VARCHAR(50) NOT NULL COMMENT '菜单名称',
+    menu_type    TINYINT     NOT NULL DEFAULT 1 COMMENT '节点类型：0目录 1菜单 2按钮',
+    path         VARCHAR(200)         DEFAULT NULL COMMENT '前端路由地址',
+    component    VARCHAR(255)         DEFAULT NULL COMMENT '前端组件路径',
+    perms        VARCHAR(100)         DEFAULT NULL COMMENT '权限标识，如 admin:audit:pass',
+    icon         VARCHAR(50)          DEFAULT NULL COMMENT '图标（Element Plus 图标名）',
+    sort         INT         NOT NULL DEFAULT 0 COMMENT '排序值，越小越靠前',
+    visible      TINYINT     NOT NULL DEFAULT 1 COMMENT '是否显示：0隐藏 1显示',
+    status       TINYINT     NOT NULL DEFAULT 1 COMMENT '状态：0停用 1启用',
+    create_time  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_parent_id (parent_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='系统菜单权限表（树形结构）';
+
 -- =====================================================================
--- 建表完成：共 35 张表
+-- 建表完成：共 36 张表
 -- =====================================================================
