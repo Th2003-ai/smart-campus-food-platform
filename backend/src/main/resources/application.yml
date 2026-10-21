@@ -117,10 +117,7 @@ campus:
   #   http://localhost:8088~8091  —— 端口模式（deploy/nginx-ports.conf）
   # WebMvcConfig 用的是 allowedOriginPatterns，支持 * 通配。
   cors:
-    # 追加「队友用局域网/虚拟网 IP 直接访问」的 origin：
-    # Spring 的 allowedOriginPatterns 支持 :[*] 通配端口，
-    # 所以一条规则覆盖 8088~8091 四个入口（见 deploy/nginx.conf 的 listen）。
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://*.campus.local:8088,http://localhost:8088,http://localhost:8089,http://localhost:8090,http://localhost:8091,http://10.174.130.230:[*],http://26.171.182.93:[*]}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://*.campus.local:8088,http://localhost:8088,http://localhost:8089,http://localhost:8090,http://localhost:8091}
 
 # ---------------------------------------------------------------------
 # 敏感值加密（Jasypt）
