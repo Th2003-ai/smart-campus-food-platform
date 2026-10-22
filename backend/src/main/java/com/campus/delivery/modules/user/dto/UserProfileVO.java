@@ -35,4 +35,11 @@ public class UserProfileVO implements Serializable {
     private String tastePreference;
 
     private String allergyFoods;
+
+    /**
+     * 账户余额（仅学生有；余额支付用）。
+     *
+     * <p>金额只以数据库为准，Redis 不缓存余额 —— 见 PPT「金额/余额只落磁盘库 + 事务」。
+     */
+    private java.math.BigDecimal balance;
 }

@@ -2,6 +2,7 @@ package com.campus.delivery.security;
 
 import com.campus.delivery.common.api.ResultCode;
 import com.campus.delivery.common.exception.BusinessException;
+import com.campus.delivery.modules.user.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Arrays;
+import java.util.Set;
 
 /**
  * 统一认证与授权拦截器（对应需求文档 5.6.1 难点一的解决思路）。
@@ -34,12 +36,26 @@ import java.util.Arrays;
 public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtUtils jwtUtils;
+    private final AuthService authService;
 
     @Value("${campus.jwt.header:Authorization}")
     private String tokenHeader;
 
     @Value("${campus.jwt.prefix:Bearer }")
     private String tokenPrefix;
+
+    /**
+     * 「仅 GET 公开」的路径。
+     *
+     * <p>为什么需要这个：{@code WebMvcConfig#PUBLIC_PATHS} 用的是
+     * {@code excludePathPatterns}，只能按路径排除、无法区分 HTTP 方法。
+     * 像 {@code /reviews} 这种「列表公开、提交要登录」的接口，
+     * 如果整体放进白名单，POST 也会跳过鉴权，控制器里的
+     * {@code UserContext.getUserId()} 就会抛 401（学生提交评价一直失败的原因）。
+     *
+     * <p>所以这类路径不进白名单，改为在这里按方法放行。
+     */
+    private static final Set<String> PUBLIC_GET_PATHS = Set.of("/reviews");
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -49,6 +65,12 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         // 非 Controller 方法（静态资源等）不校验
         if (!(handler instanceof HandlerMethod handlerMethod)) {
+            return true;
+        }
+        // 只读接口（GET）对这批路径免登录
+        if (HttpMethod.GET.matches(request.getMethod())
+                && PUBLIC_GET_PATHS.contains(request.getRequestURI().replaceFirst(
+                        request.getContextPath(), ""))) {
             return true;
         }
 
@@ -93,6 +115,11 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         if (StringUtils.hasText(tokenPrefix) && token.startsWith(tokenPrefix.trim())) {
             token = token.substring(tokenPrefix.trim().length()).trim();
+        }
+        // 已退出登录的 Token 立即失效（黑名单存于 Redis，TTL 与 Token 剩余有效期一致）
+        if (authService.isTokenBlacklisted(token)) {
+            log.debug("Token 已在黑名单中，拒绝访问: uri={}", request.getRequestURI());
+            return null;
         }
         return jwtUtils.parseToken(token);
     }

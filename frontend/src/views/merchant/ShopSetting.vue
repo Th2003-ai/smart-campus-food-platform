@@ -37,7 +37,12 @@
             </el-form-item>
 
             <el-form-item label="店铺公告" prop="notice">
-              <el-input v-model="form.notice" maxlength="100" show-word-limit placeholder="例如：高峰期出餐约 15 分钟" />
+              <el-input
+                v-model="form.notice"
+                maxlength="100"
+                show-word-limit
+                placeholder="例如：高峰期出餐约 15 分钟"
+              />
             </el-form-item>
 
             <el-form-item label="联系电话" prop="phone">
@@ -87,9 +92,7 @@
             <el-tag :type="isOpen ? 'success' : 'info'" size="large">
               {{ isOpen ? '营业中' : '休息中' }}
             </el-tag>
-            <p class="text-muted">
-              休息中时学生端仍能搜到你的店，但不能下单；切回营业中后立即可下单。
-            </p>
+            <p class="text-muted">休息中时学生端仍能搜到你的店，但不能下单；切回营业中后立即可下单。</p>
             <el-button
               :type="isOpen ? 'warning' : 'success'"
               :loading="switching"

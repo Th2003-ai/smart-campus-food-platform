@@ -3,6 +3,7 @@ package com.campus.delivery.modules.order.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.delivery.common.api.PageResult;
+import com.campus.delivery.common.api.ResultCode;
 import com.campus.delivery.common.constant.RedisKeys;
 import com.campus.delivery.common.enums.CommonEnums;
 import com.campus.delivery.common.enums.OrderStatus;
@@ -25,11 +26,14 @@ import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.websocket.OrderNotifyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -71,19 +75,101 @@ public class OrderService {
     private final ShopService shopService;
     private final OrderNotifyHandler orderNotifyHandler;
     private final RedisTemplate<String, Object> redisTemplate;
+    /** ZSet 类结构（抢单池）用纯字符串序列化，member 就是订单ID */
+    private final StringRedisTemplate stringRedisTemplate;
+    /** 超时未接单延时队列（Redis ZSet），下单入队、接单/取消出队 */
+    private final OrderTimeoutQueue orderTimeoutQueue;
+    /** 模拟支付：扣余额 / 退款 / 写 payment_record */
+    private final com.campus.delivery.modules.payment.service.PaymentService paymentService;
 
     // ==================================================================
     // 学生端
     // ==================================================================
 
     /**
-     * 提交订单（购物车结算 + 模拟支付）。
+     * 提交订单（兼容入口：不带幂等键）。
      *
-     * <p>TODO(成员4)：把模拟支付落库到 {@code payment_record}，
-     * 余额支付需扣减 {@code student.balance} 并做余额充足校验。
+     * <p>老前端或脚本调用这个重载时不启用幂等保护；
+     * 前端正常提交请走带 {@code requestId} 的重载。
      */
     @Transactional(rollbackFor = Exception.class)
     public OrderVO createOrder(String userId, CreateOrderRequest request) {
+        return createOrder(userId, request, null);
+    }
+
+    /**
+     * 提交订单（购物车结算 + 模拟支付），带下单幂等保护。
+     *
+     * <p>三层防护，从快到慢：
+     * <ol>
+     *   <li><b>Redis 幂等键</b>：{@code SET idempotent:order:{userId}:{requestId} NX EX 300}。
+     *       抢到 → 处理；没抢到 → 若值已是订单ID，直接把原订单返回（重复请求得到同一结果）；
+     *       值仍是 PROCESSING 说明上一请求还在跑，提示"请勿重复提交"。</li>
+     *   <li><b>数据库唯一索引</b>：{@code uk_user_request (user_id, request_id)}。
+     *       Redis 不可用或并发穿透时，第二次插入会抛 {@link DuplicateKeyException}，
+     *       转成友好提示而不是 500。</li>
+     *   <li><b>状态机语义幂等</b>：取消/取餐等后续操作本身有状态前置校验，重复调用不会重复执行。</li>
+     * </ol>
+     *
+     * <p>失败时释放 Redis 键，避免用户因为一次失败（如库存不足）被锁 5 分钟。
+     *
+     * @param requestId 客户端请求号（前端进入结算页时生成，随 X-Request-Id 传入）；为空则不启用幂等
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public OrderVO createOrder(String userId, CreateOrderRequest request, String requestId) {
+        boolean idempotent = requestId != null && !requestId.isBlank();
+        String idemKey = idempotent ? RedisKeys.IDEMPOTENT_ORDER + userId + ":" + requestId : null;
+
+        if (idempotent) {
+            Boolean acquired;
+            try {
+                acquired = stringRedisTemplate.opsForValue()
+                        .setIfAbsent(idemKey, "PROCESSING", Duration.ofMinutes(5));
+            } catch (Exception e) {
+                // 幂等组件异常不能阻断下单：退化为只靠数据库唯一索引兜底
+                log.warn("幂等键写入失败，本次跳过 Redis 幂等: key={}, err={}", idemKey, e.getMessage());
+                acquired = Boolean.TRUE;
+                idemKey = null;
+            }
+            if (!Boolean.TRUE.equals(acquired)) {
+                String cached = stringRedisTemplate.opsForValue().get(idemKey);
+                if (cached != null && !"PROCESSING".equals(cached)) {
+                    Order existed = orderMapper.selectById(cached);
+                    if (existed != null) {
+                        log.info("幂等命中，返回已创建订单: userId={}, requestId={}, orderId={}",
+                                userId, requestId, cached);
+                        return buildOrderVO(existed, listItems(existed.getId()));
+                    }
+                }
+                throw new BusinessException(ResultCode.CONFLICT.getCode(), "请求正在处理中，请勿重复提交");
+            }
+        }
+
+        try {
+            OrderVO vo = doCreateOrder(userId, request, requestId);
+            if (idemKey != null) {
+                stringRedisTemplate.opsForValue()
+                        .set(idemKey, vo.getOrder().getId(), Duration.ofMinutes(5));
+            }
+            return vo;
+        } catch (DuplicateKeyException e) {
+            log.warn("重复提交被数据库唯一索引拦截: userId={}, requestId={}", userId, requestId);
+            throw new BusinessException(ResultCode.CONFLICT.getCode(), "该订单已提交，请勿重复提交");
+        } catch (RuntimeException e) {
+            // 业务失败（库存不足等）释放幂等键，允许用户修正后重试
+            if (idemKey != null) {
+                try {
+                    stringRedisTemplate.delete(idemKey);
+                } catch (Exception ignore) {
+                    // 释放失败最多等 5 分钟自动过期
+                }
+            }
+            throw e;
+        }
+    }
+
+    /** 真正的下单逻辑（由带幂等保护的 createOrder 调用） */
+    private OrderVO doCreateOrder(String userId, CreateOrderRequest request, String requestId) {
         List<CartItem> cartItems = cartService.listSelected(userId);
         if (cartItems.isEmpty()) {
             throw new BusinessException(CODE_CART_EMPTY, "购物车中没有已勾选的商品");
@@ -139,6 +225,8 @@ public class OrderService {
         order.setReceiverPhone(request.getReceiverPhone());
         order.setAddress(request.getAddress());
         order.setRemark(request.getRemark());
+        // 幂等键落库：与 Redis 键、唯一索引共同构成三层防护
+        order.setRequestId(requestId);
         order.setVersion(0);
         orderMapper.insert(order);
 
@@ -147,6 +235,9 @@ public class OrderService {
             orderItem.setOrderId(order.getId());
             orderItemMapper.insert(orderItem);
         }
+
+        // 3.5) 收款：余额支付扣 student.balance（不足则抛异常回滚整单），并写 payment_record
+        paymentService.charge(order, userId);
 
         // 4) 初始状态流转记录
         OrderStatusLog statusLog = new OrderStatusLog();
@@ -163,6 +254,9 @@ public class OrderService {
 
         // 6) 实时通知商户有新订单
         notifyMerchantNewOrder(shopId, order);
+
+        // 7) 放入超时未接单延时队列：到期后若仍是「待接单」，由 OrderTimeoutSweeper 自动取消
+        orderTimeoutQueue.enqueue(order.getId());
 
         log.info("订单创建成功: orderNo={}, userId={}, amount={}", order.getOrderNo(), userId, order.getTotalAmount());
         return buildOrderVO(order, orderItems);
@@ -205,9 +299,38 @@ public class OrderService {
             throw new BusinessException(CODE_CANNOT_CANCEL, "订单已被商家接单，无法直接取消，请联系商家或提交客服工单");
         }
         orderStateMachine.transit(order, OrderStatus.CANCELED, userId, RoleEnum.STUDENT.getCode(), reason);
+        // 已取消，不再需要超时扫描
+        orderTimeoutQueue.remove(orderId);
         restoreStock(orderId);
-        // TODO(成员4)：模拟支付退款，把 pay_status 置为已退款并写 payment_record
+        // 退款：条件更新 pay_status 1→2 抢到退款权才回补余额，天然防重复退款
+        paymentService.refund(order, reason);
         orderNotifyHandler.sendToUser(userId, "ORDER_STATUS", statusPayload(order));
+    }
+
+    /**
+     * 系统自动取消超时未接单的订单（供 {@code OrderTimeoutSweeper} 调用）。
+     *
+     * <p>只在订单仍处于「待接单」时执行，避免把商户已接单的订单误取消
+     * —— 延时队列里的成员可能在到期前就已经被接单出队，这里再校验一次状态。
+     *
+     * @return true 表示本次确实取消了订单
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean systemCancelIfPending(String orderId, String reason) {
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) {
+            return false;
+        }
+        OrderStatus before = OrderStatus.of(order.getOrderStatus());
+        if (before != OrderStatus.PENDING_ACCEPT) {
+            return false;
+        }
+        order = orderStateMachine.transit(order, OrderStatus.CANCELED, "SYSTEM", "SYSTEM", reason);
+        restoreStock(orderId);
+        paymentService.refund(order, reason);
+        notifyOrderStatus(order, before);
+        log.warn("系统自动取消超时订单: orderId={}, reason={}", orderId, reason);
+        return true;
     }
 
     // ==================================================================
@@ -257,10 +380,12 @@ public class OrderService {
             orderMapper.updateById(order);
             pushToGrabPool(order);
         }
+        // 商户已接单/拒单：订单离开「待接单」，从超时队列移除，避免被自动取消
+        orderTimeoutQueue.remove(orderId);
         // 拒单：回补库存并退款
         if (targetStatus == OrderStatus.CANCELED) {
             restoreStock(orderId);
-            // TODO(成员4)：模拟支付退款，把 pay_status 置为已退款
+            paymentService.refund(order, reason);
         }
 
         notifyOrderStatus(order, before);
@@ -291,6 +416,61 @@ public class OrderService {
         return order;
     }
 
+    // ==================================================================
+    // 自取订单：最后一公里（学生或商户确认取餐）
+    // ==================================================================
+
+    /**
+     * 自取订单确认取餐（2 待取餐 → 4 已完成）。
+     *
+     * <p>为什么需要这个接口：自取订单不进抢单池（{@link #pushToGrabPool} 对
+     * deliveryType=2 直接返回），所以没有骑手来完成「取餐 → 送达」；
+     * 而 {@link #merchantTransit} 又不允许商户把订单置为已完成。
+     * 缺少这条路径时，自取订单会永久停在「待取餐」，学生也永远无法评价
+     * （{@code ReviewService} 要求订单已完成）。
+     *
+     * <p>为什么学生和商户都能点：现实中商家忙起来可能来不及点确认，
+     * 允许学生自助确认可避免订单卡死。谁先点谁生效，
+     * 后点的一方会收到「订单当前为「已完成」」的提示，不会重复完成。
+     *
+     * <p>权限：学生只能确认自己的订单，商户只能确认本店订单（店铺从登录态解析，不接受前端传参）。
+     *
+     * @param orderId      订单ID
+     * @param operatorId   操作人ID（学生ID，或商户的 sys_user.id）
+     * @param operatorRole 操作人角色：STUDENT / MERCHANT
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Order confirmSelfPickup(String orderId, String operatorId, String operatorRole) {
+        Order order = requireOrder(orderId);
+        if (!Integer.valueOf(2).equals(order.getDeliveryType())) {
+            throw new BusinessException(30030, "该订单为骑手配送，请由骑手完成送达");
+        }
+
+        if (RoleEnum.STUDENT.getCode().equalsIgnoreCase(operatorRole)) {
+            if (!operatorId.equals(order.getUserId())) {
+                throw new BusinessException(CODE_NO_PERMISSION, "无权操作他人的订单");
+            }
+        } else if (RoleEnum.MERCHANT.getCode().equalsIgnoreCase(operatorRole)) {
+            if (!shopService.currentShopId().equals(order.getShopId())) {
+                throw new BusinessException(CODE_NO_PERMISSION, "无权操作其他店铺的订单");
+            }
+        } else {
+            throw new BusinessException(CODE_NO_PERMISSION, "只有下单学生或店铺商户可以确认取餐");
+        }
+
+        OrderStatus before = OrderStatus.of(order.getOrderStatus());
+        if (before != OrderStatus.PENDING_PICKUP) {
+            throw new BusinessException(30031,
+                    "订单当前为「" + before.getDesc() + "」，只有「待取餐」可以确认取餐");
+        }
+
+        order = orderStateMachine.transit(order, OrderStatus.FINISHED, operatorId, operatorRole,
+                "自取订单确认取餐");
+        notifyOrderStatus(order, before);
+        log.info("自取订单完成: orderId={}, operator={}({})", orderId, operatorId, operatorRole);
+        return order;
+    }
+
     /** 查询订单实体（供 delivery 模块抢单校验使用） */
     public Order requireOrder(String orderId) {
         Order order = orderMapper.selectById(orderId);
@@ -307,6 +487,16 @@ public class OrderService {
      */
     public List<Map<String, Object>> dailyTrend(int days) {
         return orderMapper.statDailyTrend(days);
+    }
+
+    /**
+     * 商户端经营概览：本店订单聚合指标。
+     *
+     * <p>店铺归属从登录态解析（{@code currentShopId}），不接受前端传参，
+     * 保证商户只能看到自己店铺的数据。
+     */
+    public Map<String, Object> shopOverview() {
+        return orderMapper.statShopOverview(shopService.currentShopId());
     }
 
     /** 平台级订单总量（数据看板核心指标） */
@@ -357,7 +547,11 @@ public class OrderService {
             throw new BusinessException(40002, "手慢了，订单已被其他骑手抢走");
         }
         order.setRiderId(riderId);
-        orderMapper.updateById(order);
+        int rows = orderMapper.updateById(order);   // 带乐观锁 version：WHERE id=? AND version=?
+        if (rows == 0) {
+            // 版本号已变 = 别的骑手抢先绑定了
+            throw new BusinessException(40002, "手慢了，订单已被其他骑手抢走");
+        }
         removeFromGrabPool(orderId);
 
         Order latest = requireOrder(orderId);
@@ -436,17 +630,26 @@ public class OrderService {
         return payload;
     }
 
+    // ------------------------------------------------------------------
+    // 场景 4（PPT 第 13 页）：骑手抢单池
+    //   结构：ZSet —— delivery:grab:pool，member = 订单 ID，score = 出餐时间戳
+    //   为什么不设 TTL：池子靠业务事件增删，有单就留着，不能自己过期
+    //   一致性：以数据库为准 —— 大厅列表实际查的是 rider_id IS NULL 的订单，
+    //           Redis 只负责「快速筛出哪些单可抢」，即使池子脏了也不影响正确性
+    //   出餐时 ZADD，抢单成功 / 接单 / 取消时 ZREM
+    // ------------------------------------------------------------------
     /** 订单进入骑手抢单池（Redis 有序集合，避免高频读压库） */
     private void pushToGrabPool(Order order) {
         if (!Integer.valueOf(1).equals(order.getDeliveryType())) {
             return; // 自取订单不进入抢单池
         }
-        redisTemplate.opsForZSet().add(RedisKeys.GRAB_POOL, order.getId(),
+        // 用 StringRedisTemplate：member 就是订单ID，纯字符串才便于 redis-cli 排查
+        stringRedisTemplate.opsForZSet().add(RedisKeys.GRAB_POOL, order.getId(),
                 System.currentTimeMillis());
         orderNotifyHandler.broadcastToRole(RoleEnum.RIDER.getCode(), "GRAB_ORDER", statusPayload(order));
     }
 
     private void removeFromGrabPool(String orderId) {
-        redisTemplate.opsForZSet().remove(RedisKeys.GRAB_POOL, orderId);
+        stringRedisTemplate.opsForZSet().remove(RedisKeys.GRAB_POOL, orderId);
     }
 }

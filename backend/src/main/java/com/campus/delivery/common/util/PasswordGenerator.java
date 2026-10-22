@@ -33,7 +33,12 @@ public final class PasswordGenerator {
     }
 
     public static void main(String[] args) {
-        String raw = (args != null && args.length > 0) ? args[0] : "123456";
+        if (args == null || args.length == 0) {
+            System.out.println("用法：PasswordGenerator <明文口令>");
+            System.out.println("不要把弱口令（如 123456）写进代码，也不要把生成的密文提交到仓库。");
+            return;
+        }
+        String raw = args[0];
         String encoded = encode(raw);
         System.out.println("明文密码: " + raw);
         System.out.println("BCrypt密文: " + encoded);

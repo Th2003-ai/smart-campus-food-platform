@@ -1,0 +1,65 @@
+# =====================================================================
+#  application-local.yml.example  —— 本地私密配置模板
+#
+#  用法：
+#      copy application-local.yml.example application-local.yml
+#      然后按自己电脑的实际情况修改 application-local.yml
+#
+#  【为什么是复制而不是直接改本文件】
+#      application-local.yml 已在 .gitignore 中，不会被提交；
+#      而本示例文件是共享模板，只放占位值，不放任何真实口令。
+#
+#  优先级：环境变量 > application-local.yml > application-dev.yml
+#  也就是说这里填的值会覆盖 dev 的默认值，但仍可被环境变量再覆盖。
+#
+#  启动时带上 local profile：
+#      mvn spring-boot:run -Dspring-boot.run.profiles=dev,local
+# =====================================================================
+
+spring:
+  datasource:
+    # ---------- 写法 A：明文（最简单，适合本机开发）----------
+    url: jdbc:mysql://localhost:3306/campus_ai_delivery?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 改成你自己的MySQL口令
+
+    # ---------- 写法 B：加密（推荐，即使文件被误提交也不泄露口令）----------
+    # 1) 设置密钥（不要提交这个值）：
+    #      set JASYPT_ENCRYPTOR_PASSWORD=你自己的一串随机密钥
+    # 2) 生成密文：
+    #      mvn -q compile exec:java -Dexec.mainClass=com.campus.delivery.common.util.ConfigEncryptor -Dexec.args="enc 你的MySQL口令"
+    # 3) 把 username/password 换成下面的形式（username 也可以加密）：
+    #
+    # url: jdbc:mysql://localhost:3306/campus_ai_delivery?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    # username: ENC(把第2步得到的密文粘到这里)
+    # password: ENC(把第2步得到的密文粘到这里)
+    #
+    # 4) 启动时必须提供同一个密钥，否则解密失败：
+    #      set JASYPT_ENCRYPTOR_PASSWORD=你自己的一串随机密钥
+    #      mvn spring-boot:run -Dspring-boot.run.profiles=dev,local
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # Redis 没设口令就留空
+      password:
+
+# ---------------------------------------------------------------------
+# 其它可覆盖项（按需取消注释）
+# ---------------------------------------------------------------------
+# server:
+#   port: 8080
+
+# campus:
+#   jwt:
+#     # 生产环境务必改成不少于 32 字符的随机串
+#     secret: 改成你自己的JWT密钥
+#   ai:
+#     # 不配置 API Key 时 AI 能力自动降级为关键词检索，不影响其它功能
+#     api-key: 你的大模型API Key
+#     api-url: https://你的服务商/v1/chat/completions
+#     model: 你的模型名
+#   cors:
+#     # 前端不在 5173 时改这里，多个用英文逗号分隔
+#     allowed-origins: http://localhost:5173

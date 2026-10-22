@@ -48,6 +48,13 @@ public class RecommendService {
     private final NlOrderService nlOrderService;
     private final RedisTemplate<String, Object> redisTemplate;
 
+    // ------------------------------------------------------------------
+    // 场景 5（PPT 第 13 页）：AI 推荐结果缓存
+    //   结构：String(JSON) —— ai:recommend:{维度}
+    //   过期：10 分钟（推荐结果允许过期，过期重算即可 → 最终一致）
+    //   为什么必须缓存：每次推荐都要调大模型，不缓存既慢又烧钱
+    // ------------------------------------------------------------------
+
     /** 个性化推荐 */
     @SuppressWarnings("unchecked")
     public Map<String, Object> recommend(String userId, String scene, Integer limit) {

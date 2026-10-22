@@ -1,0 +1,14 @@
+{
+  // ============================================================
+  // 打开这个项目时，VS Code 会提示安装这几个扩展（右下角弹「推荐」）
+  // 装上它们，仓库里的 .editorconfig / .prettierrc / .eslintrc.cjs
+  // 才会真正生效；不装的话那些文件对使用者是"隐形"的。
+  // ============================================================
+  "recommendations": [
+    "Vue.volar",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "EditorConfig.EditorConfig"
+  ],
+  "unwantedRecommendations": []
+}

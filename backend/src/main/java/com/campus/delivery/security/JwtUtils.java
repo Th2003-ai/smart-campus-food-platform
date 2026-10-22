@@ -69,6 +69,33 @@ public class JwtUtils {
         }
     }
 
+    /**
+     * 取 Token 剩余有效期（秒）。
+     *
+     * <p>用于写黑名单时设置 TTL：Token 自然过期后黑名单条目也应消失，
+     * 否则 Redis 里会堆积大量永远用不到的 key。
+     *
+     * @return 剩余秒数；Token 无效或已过期返回 0
+     */
+    public long getRemainingSeconds(String token) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(signKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            Date expiration = claims.getExpiration();
+            if (expiration == null) {
+                return 0L;
+            }
+            long remaining = (expiration.getTime() - System.currentTimeMillis()) / 1000L;
+            return Math.max(remaining, 0L);
+        } catch (Exception e) {
+            log.debug("取 Token 剩余有效期失败: {}", e.getMessage());
+            return 0L;
+        }
+    }
+
     /** Token 有效期（分钟） */
     public long getExpireMinutes() {
         return expireMinutes;

@@ -1,0 +1,26 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    后端启动配置（IntelliJ IDEA）
+    ------------------------------------------------------------------
+    放在 .run/ 目录下，IDEA 会自动识别为可运行的配置，全员共享。
+
+    关键点：必须激活 dev + local 两个 profile
+      dev   —— 数据库/Redis 连接
+      local —— 个人数据库口令（application-local.yml，不进 Git）
+    只启用 dev 时读不到 application-local.yml，口令会回落到占位符
+    CHANGE_ME，启动后报 Access denied for user 'root'@'localhost'。
+
+    若你不想用 application-local.yml，也可以删掉下面的 PROGRAM_PARAMETERS，
+    改为在 Environment variables 里填 DB_PASSWORD=<你的口令>。
+  -->
+  <configuration default="false" name="CampusDeliveryApplication" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.campus.delivery.CampusDeliveryApplication" />
+    <module name="campus-ai-delivery-backend" />
+    <option name="PROGRAM_PARAMETERS" value="--spring.profiles.active=dev,local" />
+    <option name="VM_PARAMETERS" value="-Dfile.encoding=UTF-8" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

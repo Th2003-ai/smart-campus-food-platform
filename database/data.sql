@@ -5,8 +5,9 @@
 --  【重要】演示账号密码说明
 --    密码列在下方统一写入占位符，不在此处伪造哈希值。
 --    后端以 dev profile 启动时，DevDataInitializer 会把密码为空的演示账号
---    统一初始化为 123456 的 BCrypt 密文，并打印到启动日志。
---    如需手动生成密文：运行 backend 中 common/util/PasswordGenerator 的 main 方法。
+--    初始化为各角色预设口令的 BCrypt 密文（四个角色口令各不相同，见 database/README.md）。
+--    如需手动生成密文：运行 backend 中 common/util/PasswordGenerator 的 main 方法，
+--    把明文口令作为参数传入（不传参数会打印用法提示）。
 -- =====================================================================
 
 USE campus_ai_delivery;
@@ -21,8 +22,8 @@ INSERT INTO sys_user (id, username, password, role, nickname, phone, status) VAL
 ('U000000000000000000000000000003', '13700000001', '', 'RIDER',    '演示骑手', '13700000001', 1),
 ('U000000000000000000000000000004', 'admin',        '', 'ADMIN',    '系统管理员', '13600000001', 1);
 
-INSERT INTO student (id, user_id, student_no, real_name, college, grade) VALUES
-('S000000000000000000000000000001', 'U000000000000000000000000000001', '20210001', '演示学生', '计算机学院', '2021级');
+INSERT INTO student (id, user_id, student_no, real_name, college, grade, balance) VALUES
+('S000000000000000000000000000001', 'U000000000000000000000000000001', '20210001', '演示学生', '计算机学院', '2021级', 200.00);
 
 INSERT INTO diet_profile (id, user_id, diet_goal, taste_preference, allergy_foods) VALUES
 ('D000000000000000000000000000001', 'U000000000000000000000000000001', 1, '清淡,不辣', '香菜,花生');
@@ -142,3 +143,43 @@ INSERT INTO ai_config (id, provider, api_url, model_name, api_key, temperature, 
 INSERT INTO banner (id, title, image_url, sort, status) VALUES
 ('B00000000000000000000000000001', 'AI 一句话点餐', '/static/banner/ai-order.png', 1, 1),
 ('B00000000000000000000000000002', '校园热门菜品', '/static/banner/hot-dish.png', 2, 1);
+
+-- ---------------------------------------------------------------------
+-- 9. 系统菜单权限树（任务2：树形数据结构可视化，parent_id 自引用，三层）
+--    目录(0) → 菜单(1) → 按钮(2)；parent_id='0' 为根节点
+-- ---------------------------------------------------------------------
+INSERT INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, perms, icon, sort, visible, status) VALUES
+('100',  '0',   '学生端',       0, NULL, NULL, NULL, 'User',          10, 1, 1),
+('101',  '100', '首页点餐',     1, '/student/home',    'views/student/Home',     NULL, 'Dish',          10, 1, 1),
+('102',  '100', '购物车',       1, '/student/cart',    'views/student/Cart',     NULL, 'ShoppingCart',  20, 1, 1),
+('103',  '100', '我的订单',     1, '/student/orders',  'views/student/Orders',   NULL, 'List',          30, 1, 1),
+('1031', '103', '去评价',       2, NULL, NULL, 'student:order:comment', NULL, 10, 1, 1),
+('1032', '103', '申请售后',     2, NULL, NULL, 'student:order:refund',  NULL, 20, 1, 1),
+('104',  '100', '饮食画像',     1, '/student/profile', 'views/student/Profile',  NULL, 'Food',          40, 1, 1),
+('105',  '100', '个人中心',     1, '/student/me',      'views/student/Me',       NULL, 'UserFilled',    50, 1, 1),
+('200',  '0',   '商户端',       0, NULL, NULL, NULL, 'Shop',          20, 1, 1),
+('201',  '200', '店铺管理',     1, '/merchant/shop',       'views/merchant/Shop',     NULL, 'Shop',           10, 1, 1),
+('202',  '200', '菜品管理',     1, '/merchant/dish',       'views/merchant/Dish',     NULL, 'Dish',           20, 1, 1),
+('2021', '202', '上架菜品',     2, NULL, NULL, 'dish:create', NULL, 10, 1, 1),
+('2022', '202', '库存调整',     2, NULL, NULL, 'dish:stock',  NULL, 20, 1, 1),
+('203',  '200', '订单处理',     1, '/merchant/orders',     'views/merchant/Orders',   NULL, 'Tickets',        30, 1, 1),
+('2031', '203', '接单',         2, NULL, NULL, 'order:accept', NULL, 10, 1, 1),
+('2032', '203', '出餐',         2, NULL, NULL, 'order:ready',  NULL, 20, 1, 1),
+('204',  '200', '评价管理',     1, '/merchant/reviews',    'views/merchant/Reviews',  NULL, 'ChatDotRound',   40, 1, 1),
+('205',  '200', 'AI经营分析',   1, '/merchant/ai-analysis','views/merchant/AiAnalysis', NULL, 'TrendCharts',  50, 1, 1),
+('300',  '0',   '骑手端',       0, NULL, NULL, NULL, 'Bicycle',       30, 1, 1),
+('301',  '300', '订单大厅',     1, '/rider/hall',       'views/rider/Hall',       NULL, 'Flag',           10, 1, 1),
+('302',  '300', '我的配送',     1, '/rider/delivering', 'views/rider/Delivering', NULL, 'Bicycle',        20, 1, 1),
+('303',  '300', '收入统计',     1, '/rider/income',     'views/rider/Income',     NULL, 'Wallet',         30, 1, 1),
+('400',  '0',   '管理端',       0, NULL, NULL, NULL, 'Setting',       40, 1, 1),
+('401',  '400', '商户审核',     1, '/admin/audit-merchant', 'views/admin/AuditMerchant', NULL, 'CircleCheck', 10, 1, 1),
+('4011', '401', '审核通过',     2, NULL, NULL, 'admin:audit:pass',   NULL, 10, 1, 1),
+('4012', '401', '审核驳回',     2, NULL, NULL, 'admin:audit:reject', NULL, 20, 1, 1),
+('402',  '400', '骑手审核',     1, '/admin/audit-rider',    'views/admin/AuditRider',    NULL, 'Avatar',      20, 1, 1),
+('4021', '402', '审核通过',     2, NULL, NULL, 'admin:rider:pass',   NULL, 10, 1, 1),
+('4022', '402', '审核驳回',     2, NULL, NULL, 'admin:rider:reject', NULL, 20, 1, 1),
+('403',  '400', '数据看板',     1, '/admin/dashboard',  'views/admin/Dashboard', NULL, 'DataAnalysis',   30, 1, 1),
+('404',  '400', '客服工单',     1, '/admin/tickets',    'views/admin/Tickets',   NULL, 'Service',        40, 1, 1),
+('405',  '400', '系统管理',     0, NULL, NULL, NULL, 'Tools',         50, 1, 1),
+('4051', '405', '菜单管理',     1, '/admin/menu',       'views/admin/MenuTree',  NULL, 'Menu',          10, 1, 1),
+('4052', '405', '权限配置',     1, '/admin/permission', 'views/admin/Permission',NULL, 'Lock',          20, 1, 1);

@@ -37,6 +37,12 @@ public class MerchantOrderController {
         return Result.ok(orderService.pageShopOrders(status, pageNum, pageSize));
     }
 
+    @Operation(summary = "本店经营概览", description = "今日订单/销售额、各状态待处理数量、累计销售额")
+    @GetMapping("/stats")
+    public Result<java.util.Map<String, Object>> stats() {
+        return Result.ok(orderService.shopOverview());
+    }
+
     @Operation(summary = "接单", description = "订单状态变更为备餐中")
     @PostMapping("/{id}/accept")
     public Result<Order> accept(@PathVariable String id) {

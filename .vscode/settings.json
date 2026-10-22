@@ -1,0 +1,37 @@
+{
+  // ============================================================
+  // 智能 AI 校园外卖平台 · VS Code 工作区设置（前端）
+  // 提交到仓库，全组打开项目即生效，不用每个人手点设置
+  // ============================================================
+
+  // 保存时自动格式化
+  "editor.formatOnSave": true,
+
+  // 缩进交给 .editorconfig 决定，关掉 VS Code 自己的自动探测，
+  // 避免它按文件内容猜出 4 格，覆盖掉规范里的 2 格
+  "editor.detectIndentation": false,
+
+  // ------------------------------------------------------------
+  // 逐个语言指定格式化器为 Prettier。
+  // 没有写成全局 editor.defaultFormatter，是因为仓库里还有 Java 代码：
+  // 全局指定后，在 VS Code 里打开 .java 按保存会弹「找不到格式化程序」。
+  // ------------------------------------------------------------
+  "[vue]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[scss]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+
+  // ------------------------------------------------------------
+  // ESLint 扩展配置
+  // ------------------------------------------------------------
+
+  // 要检查哪些类型的文件
+  "eslint.validate": ["javascript", "typescript", "vue"],
+
+  // 关键一项：工作区根目录是仓库根，而 eslint 装在 frontend 子目录里。
+  // 不指定这一项，ESLint 扩展找不到规则，表现就是"装了但一行都不报错"。
+  "eslint.workingDirectories": [{ "directory": "frontend", "changeProcessCWD": true }]
+}

@@ -1,4 +1,4 @@
-import { del, get, post } from '@/utils/request'
+import { del, get, post, put } from '@/utils/request'
 import type { PageResult } from '@/utils/request'
 
 export interface Knowledge {
@@ -8,6 +8,8 @@ export interface Knowledge {
   answer: string
   keywords?: string
   hitCount?: number
+  /** 0 停用 1 启用 */
+  status?: number
 }
 
 export interface Ticket {
@@ -54,6 +56,65 @@ export function dashboardTagCloud(limit = 30) {
   return get<Array<Record<string, unknown>>>('/admin/dashboard/tag-cloud', { limit })
 }
 
+/** 审核列表 */
+export interface MerchantAuditItem {
+  id: string
+  merchantName: string
+  contactName?: string
+  contactPhone?: string
+  licenseNo?: string
+  /** 0待审核 1已通过 2已驳回 */
+  auditStatus: number
+  auditRemark?: string
+  auditTime?: string
+  createTime?: string
+  userId?: string
+  /** 账号状态：0禁用 1正常（null 表示账号已不存在） */
+  accountStatus?: number | null
+}
+
+export interface RiderAuditItem {
+  id: string
+  realName: string
+  studentCardNo?: string
+  vehicleType?: string
+  /** 0休息中 1接单中 */
+  workStatus?: number
+  deliveringCount?: number
+  totalIncome?: number
+  /** 0待审核 1已通过 2已驳回 */
+  auditStatus: number
+  auditRemark?: string
+  createTime?: string
+  userId?: string
+  accountStatus?: number | null
+}
+
+export interface ShopAuditItem {
+  id: string
+  shopName: string
+  merchantId: string
+  /** 0休息中 1营业中 */
+  businessStatus?: number
+  /** 0正常 1已封禁 */
+  banStatus: number
+  monthlySales?: number
+  score?: number
+  createTime?: string
+}
+
+export function listMerchantsForAudit(auditStatus?: number) {
+  return get<MerchantAuditItem[]>('/admin/audit/merchants', { auditStatus })
+}
+
+export function listRidersForAudit(auditStatus?: number) {
+  return get<RiderAuditItem[]>('/admin/audit/riders', { auditStatus })
+}
+
+export function listShopsForAudit(banStatus?: number) {
+  return get<ShopAuditItem[]>('/admin/audit/shops', { banStatus })
+}
+
 /** 审核与处置 */
 export function auditMerchant(id: string, pass: boolean, remark?: string) {
   return post<void>(`/admin/audit/merchant/${id}`, null, { params: { pass, remark } })
@@ -89,6 +150,69 @@ export function listTickets(params?: { status?: number; pageNum?: number; pageSi
   return get<PageResult<Ticket>>('/tickets', params)
 }
 
+/** 学生端：我的工单（查看客服处理进度） */
+export function listMyTickets() {
+  return get<Ticket[]>('/tickets/mine')
+}
+
 export function handleTicket(id: string, reply: string, close = false) {
   return post<void>(`/tickets/${id}/handle`, null, { params: { reply, close } })
+}
+
+/** 菜单权限树（树形数据结构可视化） */
+export interface MenuNode {
+  id: string
+  parentId: string
+  label: string
+  menuType: number
+  typeText: string
+  path?: string
+  component?: string
+  perms?: string
+  icon?: string
+  sort?: number
+  visible?: number
+  status?: number
+  children?: MenuNode[]
+}
+
+/** 菜单平铺记录（数据库 sys_menu 原始行） */
+export interface MenuFlat {
+  id: string
+  parentId: string
+  menuName: string
+  menuType: number
+  path?: string
+  component?: string
+  perms?: string
+  icon?: string
+  sort?: number
+}
+
+/** 菜单树形结构（目录→菜单→按钮） */
+export function menuTree() {
+  return get<MenuNode[]>('/admin/menu/tree')
+}
+
+/** 菜单平铺列表 */
+export function menuList() {
+  return get<MenuFlat[]>('/admin/menu/list')
+}
+
+/** 系统配置（sys_config 键值对） */
+export interface ConfigItem {
+  id?: string
+  configKey: string
+  configValue?: string
+  remark?: string
+  createTime?: string
+  updateTime?: string
+}
+
+export function listConfig() {
+  return get<ConfigItem[]>('/admin/config')
+}
+
+export function saveConfig(data: ConfigItem) {
+  return put<void>('/admin/config', data)
 }

@@ -1,5 +1,6 @@
 package com.campus.delivery.modules.order.controller;
 
+import com.campus.delivery.common.annotation.RateLimit;
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.order.dto.CreateOrderRequest;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,10 +33,12 @@ public class OrderController {
     private final OrderService orderService;
 
     @Operation(summary = "提交订单", description = "购物车结算 + 模拟支付")
+    @RateLimit(name = "order:create", limit = 10, seconds = 60, message = "下单过于频繁")
     @PostMapping
     @RequiresRole(RoleEnum.STUDENT)
-    public Result<OrderVO> create(@RequestBody CreateOrderRequest request) {
-        return Result.ok(orderService.createOrder(UserContext.getUserId(), request));
+    public Result<OrderVO> create(@RequestBody CreateOrderRequest request,
+                                  @RequestHeader(value = "X-Request-Id", required = false) String requestId) {
+        return Result.ok(orderService.createOrder(UserContext.getUserId(), request, requestId));
     }
 
     @Operation(summary = "我的订单列表", description = "可按状态筛选")
@@ -56,6 +60,22 @@ public class OrderController {
     @RequiresRole(RoleEnum.STUDENT)
     public Result<Void> cancel(@PathVariable String id, @RequestParam(required = false) String reason) {
         orderService.cancelByStudent(UserContext.getUserId(), id, reason);
+        return Result.ok();
+    }
+
+    /**
+     * 自取订单确认取餐（2 待取餐 → 4 已完成）。
+     *
+     * <p>学生和商户共用这一个接口：学生只能确认自己的订单，商户只能确认本店订单，
+     * 具体校验在 Service 里按登录角色判断。谁先点谁生效。
+     *
+     * <p>仅对 deliveryType=2（宿舍楼下自取）有效；骑手配送的订单必须走骑手送达。
+     */
+    @Operation(summary = "自取订单确认取餐", description = "下单学生或店铺商户均可操作，谁先点谁生效")
+    @PostMapping("/{id}/pickup")
+    @RequiresRole({RoleEnum.STUDENT, RoleEnum.MERCHANT})
+    public Result<Void> confirmPickup(@PathVariable String id) {
+        orderService.confirmSelfPickup(id, UserContext.getUserId(), UserContext.getRole());
         return Result.ok();
     }
 }

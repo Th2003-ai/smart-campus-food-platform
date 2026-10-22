@@ -4,11 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.constant.RedisKeys;
+import com.campus.delivery.common.enums.CommonEnums;
 import com.campus.delivery.common.exception.BusinessException;
 import com.campus.delivery.modules.shop.entity.Merchant;
 import com.campus.delivery.modules.shop.entity.Shop;
 import com.campus.delivery.modules.shop.mapper.MerchantMapper;
 import com.campus.delivery.modules.shop.mapper.ShopMapper;
+import com.campus.delivery.modules.user.service.UserService;
 import com.campus.delivery.security.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -16,6 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -33,7 +38,9 @@ public class ShopService {
 
     private final ShopMapper shopMapper;
     private final MerchantMapper merchantMapper;
+    private final UserService userService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final com.campus.delivery.modules.rank.service.HotRankService hotRankService;
 
     /** 店铺列表（学生端首页） */
     public PageResult<Shop> pageShops(String categoryId, String keyword, String sortBy,
@@ -54,6 +61,12 @@ public class ShopService {
         return PageResult.of(page.getTotal(), page.getCurrent(), page.getSize(), page.getRecords());
     }
 
+    // ------------------------------------------------------------------
+    // 场景 2（PPT 第 13 页）：店铺详情缓存
+    //   结构：String(JSON) —— cache:shop:detail:{shopId}
+    //   过期：10 分钟固定（店铺信息变更不频繁，没做抖动）
+    //   一致性：写后删缓存；店铺改资料 / 开关营业时主动失效
+    // ------------------------------------------------------------------
     /** 店铺详情（热点缓存，减少数据库压力） */
     public Shop getDetail(String shopId) {
         String cacheKey = RedisKeys.SHOP_DETAIL + shopId;
@@ -109,6 +122,7 @@ public class ShopService {
         shop.setLogo(form.getLogo());
         shopMapper.updateById(shop);
         evictCache(shop.getId());
+        hotRankService.invalidateShopRank();
         return shop;
     }
 
@@ -122,6 +136,7 @@ public class ShopService {
         shop.setBusinessStatus(businessStatus);
         shopMapper.updateById(shop);
         evictCache(shop.getId());
+        hotRankService.invalidateShopRank();
     }
 
     /**
@@ -158,5 +173,159 @@ public class ShopService {
 
     private void evictCache(String shopId) {
         redisTemplate.delete(RedisKeys.SHOP_DETAIL + shopId);
+    }
+
+    // ==================================================================
+    // 管理端：商户审核与店铺封禁（供 AdminAuditService 调用）
+    // ==================================================================
+
+    /**
+     * 审核商户资质。
+     *
+     * <p>约束：只有「待审核」状态可审核，防止重复审核覆盖 audit_time / audit_by
+     * 使审计链失效；驳回必须填写原因，避免静默驳回。
+     *
+     * <p>审核通过/驳回只改 merchant 表；是否需要同时禁用账号由调用方决定
+     * （见 AdminAuditService），本方法保持单一职责。
+     *
+     * @param merchantId  商户ID（merchant.id，不是 sys_user.id）
+     * @param pass        true 通过，false 驳回
+     * @param remark      审核意见，驳回时必填
+     * @param adminUserId 审核人（管理员 sys_user.id）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void auditMerchant(String merchantId, boolean pass, String remark, String adminUserId) {
+        Merchant merchant = merchantMapper.selectById(merchantId);
+        if (merchant == null) {
+            throw new BusinessException(20005, "商户不存在");
+        }
+        if (!CommonEnums.AuditStatus.WAITING.getCode().equals(merchant.getAuditStatus())) {
+            throw new BusinessException(20006, "该商户已审核（当前状态："
+                    + auditStatusText(merchant.getAuditStatus()) + "），不可重复审核");
+        }
+        if (!pass && !StringUtils.hasText(remark)) {
+            throw new BusinessException(20007, "驳回商户必须填写驳回原因");
+        }
+        merchant.setAuditStatus(pass
+                ? CommonEnums.AuditStatus.PASSED.getCode()
+                : CommonEnums.AuditStatus.REJECTED.getCode());
+        merchant.setAuditRemark(remark);
+        merchant.setAuditBy(adminUserId);
+        merchant.setAuditTime(LocalDateTime.now());
+        merchantMapper.updateById(merchant);
+    }
+
+    /**
+     * 封禁 / 解封店铺。
+     *
+     * <p>封禁时同时把营业状态置为「休息中」：否则会出现「已封禁但前台显示营业中」
+     * 的矛盾状态。封禁后 {@link #pageShops} 会把该店铺从学生端列表滤掉。
+     *
+     * @param shopId 店铺ID
+     * @param ban    true 封禁，false 解封
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateBanStatus(String shopId, boolean ban) {
+        Shop shop = shopMapper.selectById(shopId);
+        if (shop == null) {
+            throw new BusinessException(20001, "店铺不存在");
+        }
+        shop.setBanStatus(ban ? 1 : 0);
+        if (ban) {
+            shop.setBusinessStatus(0);
+        }
+        shopMapper.updateById(shop);
+        evictCache(shopId);
+    }
+
+    /**
+     * 管理端：商户审核列表。
+     *
+     * <p>不做分页（校园场景待审商户量级很小），按「待审核优先 + 提交时间倒序」排列，
+     * 便于管理端第一屏就看到要处理的记录。
+     *
+     * @param auditStatus 审核状态过滤，null 表示全部
+     */
+    public List<Merchant> listMerchantsForAudit(Integer auditStatus) {
+        return merchantMapper.selectList(new LambdaQueryWrapper<Merchant>()
+                .eq(auditStatus != null, Merchant::getAuditStatus, auditStatus)
+                .orderByAsc(Merchant::getAuditStatus)
+                .orderByDesc(Merchant::getCreateTime));
+    }
+
+    /**
+     * 管理端：店铺列表（含已封禁）。
+     *
+     * <p>必须与 {@link #pageShops} 区分：后者会过滤 ban_status = 0，
+     * 管理端若也用它，店铺一旦封禁就再也查不到，无法解封。
+     *
+     * @param banStatus 封禁状态过滤，null 表示全部
+     */
+    public List<Shop> listShopsForAudit(Integer banStatus) {
+        return shopMapper.selectList(new LambdaQueryWrapper<Shop>()
+                .eq(banStatus != null, Shop::getBanStatus, banStatus)
+                .orderByDesc(Shop::getCreateTime));
+    }
+
+    /** 商户的登录账号ID；商户不存在返回 null（供管理端审核后处理账号状态） */
+    public String merchantUserId(String merchantId) {
+        Merchant merchant = merchantMapper.selectById(merchantId);
+        return merchant == null ? null : merchant.getUserId();
+    }
+
+    private String auditStatusText(Integer status) {
+        if (CommonEnums.AuditStatus.PASSED.getCode().equals(status)) {
+            return "已通过";
+        }
+        if (CommonEnums.AuditStatus.REJECTED.getCode().equals(status)) {
+            return "已驳回";
+        }
+        return "待审核";
+    }
+
+    // ==================================================================
+    // 商户注册（供 AuthService 调用）
+    // ==================================================================
+
+    /**
+     * 创建商户档案 + 一个默认店铺。
+     *
+     * <p>为什么要同时建店铺：商户审核通过后需要用「店铺设置」页维护信息，
+     * 而 {@link #currentShopId()} 要求账号下存在店铺，否则直接报「尚未创建店铺」。
+     * 店铺初始为「休息中」，需商户自己开店，避免注册即对外营业。
+     *
+     * <p>审核状态置为 {@code 0 待审核}，管理员在后台审核通过后
+     * {@link #currentMerchantId()} 才会放行商户端操作。
+     *
+     * @param userId       关联 sys_user.id
+     * @param merchantName 商户名称（同时作为默认店铺名）
+     * @param contactName  联系人
+     * @param contactPhone 联系电话
+     * @param licenseNo    营业执照编号（可空）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void registerMerchantProfile(String userId, String merchantName, String contactName,
+                                        String contactPhone, String licenseNo) {
+        Merchant merchant = new Merchant();
+        merchant.setUserId(userId);
+        merchant.setMerchantName(merchantName);
+        merchant.setContactName(contactName);
+        merchant.setContactPhone(contactPhone);
+        merchant.setLicenseNo(licenseNo);
+        merchant.setAuditStatus(CommonEnums.AuditStatus.WAITING.getCode());
+        merchantMapper.insert(merchant);
+
+        Shop shop = new Shop();
+        shop.setMerchantId(merchant.getId());
+        shop.setShopName(merchantName);
+        shop.setPhone(contactPhone);
+        // 休息中：注册后不直接对外营业，需商户自行开启
+        shop.setBusinessStatus(0);
+        shop.setBanStatus(0);
+        shop.setMinPrice(BigDecimal.ZERO);
+        shop.setDeliveryFee(BigDecimal.ZERO);
+        shop.setScore(new BigDecimal("5.00"));
+        shop.setMonthlySales(0);
+        shopMapper.insert(shop);
     }
 }

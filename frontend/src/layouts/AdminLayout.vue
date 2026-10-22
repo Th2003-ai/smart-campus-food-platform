@@ -6,9 +6,11 @@
         <el-menu-item index="/admin/dashboard">数据看板</el-menu-item>
         <el-menu-item index="/admin/merchants">商户审核</el-menu-item>
         <el-menu-item index="/admin/riders">骑手审核</el-menu-item>
+        <el-menu-item index="/admin/shops">店铺管理</el-menu-item>
         <el-menu-item index="/admin/knowledge">知识库</el-menu-item>
         <el-menu-item index="/admin/tickets">客服工单</el-menu-item>
         <el-menu-item index="/admin/config">系统配置</el-menu-item>
+        <el-menu-item index="/admin/menu">菜单权限树</el-menu-item>
       </el-menu>
     </el-aside>
 
