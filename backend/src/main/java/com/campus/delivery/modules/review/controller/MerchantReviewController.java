@@ -1,5 +1,7 @@
 package com.campus.delivery.modules.review.controller;
 
+import com.campus.delivery.security.RequiresPerm;
+
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.review.entity.Review;
@@ -40,6 +42,7 @@ public class MerchantReviewController {
     }
 
     @Operation(summary = "回复评价")
+    @RequiresPerm("review:reply")
     @PostMapping("/{id}/reply")
     public Result<Void> reply(@PathVariable String id, @RequestParam String content) {
         reviewService.reply(id, content);

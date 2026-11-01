@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.delivery.common.constant.RedisKeys;
 import com.campus.delivery.common.exception.BusinessException;
 import com.campus.delivery.common.util.PasswordGenerator;
+import com.campus.delivery.modules.admin.service.PermissionService;
 import com.campus.delivery.modules.delivery.service.DeliveryService;
 import com.campus.delivery.modules.shop.service.ShopService;
 import com.campus.delivery.modules.user.dto.LoginRequest;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -62,6 +64,8 @@ public class AuthService {
     private final ShopService shopService;
     /** 骑手档案由配送域写入 */
     private final DeliveryService deliveryService;
+    /** 角色授权矩阵（登录时下发权限码） */
+    private final PermissionService permissionService;
 
     /** 登录 */
     public LoginResponse login(LoginRequest request) {
@@ -94,6 +98,8 @@ public class AuthService {
         response.setRole(user.getRole());
         response.setAvatar(user.getAvatar());
         response.setExpiresIn(jwtUtils.getExpireMinutes() * 60);
+        // 下发该角色的权限码，前端据此渲染菜单/按钮（与后端 @RequiresPerm 同一份数据）
+        response.setPerms(new ArrayList<>(permissionService.permsOf(user.getRole())));
         log.info("用户登录成功: userId={}, role={}", user.getId(), user.getRole());
         return response;
     }

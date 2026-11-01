@@ -1,5 +1,7 @@
 package com.campus.delivery.modules.dish.controller;
 
+import com.campus.delivery.security.RequiresPerm;
+
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.dish.entity.Dish;
 import com.campus.delivery.modules.dish.entity.DishCategory;
@@ -41,12 +43,14 @@ public class MerchantDishController {
     }
 
     @Operation(summary = "新增或修改菜品")
+    @RequiresPerm("dish:write")
     @PostMapping("/dishes")
     public Result<Dish> save(@RequestBody Dish form) {
         return Result.ok(dishService.saveDish(form));
     }
 
     @Operation(summary = "菜品上下架", description = "0下架 1上架")
+    @RequiresPerm("dish:write")
     @PutMapping("/dishes/{id}/status")
     public Result<Void> updateStatus(@PathVariable String id, @RequestParam Integer status) {
         dishService.updateStatus(id, status);
@@ -54,6 +58,7 @@ public class MerchantDishController {
     }
 
     @Operation(summary = "调整库存", description = "库存为 0 时自动下架")
+    @RequiresPerm("dish:write")
     @PutMapping("/dishes/{id}/stock")
     public Result<Void> updateStock(@PathVariable String id, @RequestParam Integer stock) {
         dishService.updateStock(id, stock);
@@ -73,6 +78,7 @@ public class MerchantDishController {
      * 只能删除本店菜品；已成交的订单保存的是明细快照，不受影响。
      */
     @Operation(summary = "删除菜品", description = "逻辑删除，仅限本店菜品；历史订单快照不受影响")
+    @RequiresPerm("dish:write")
     @DeleteMapping("/dishes/{id}")
     public Result<Void> remove(@PathVariable String id) {
         dishService.removeDish(id);

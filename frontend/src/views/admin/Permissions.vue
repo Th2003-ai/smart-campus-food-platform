@@ -9,7 +9,7 @@
       </template>
 
       <el-alert type="info" :closable="false" class="tip"
-        title="左侧切换主体，勾选该主体拥有的权限码，并设定数据范围（ALL 全部 / SHOP 本店 / SELF 本人）。保存后立即写回 sys_role_permission。" />
+        title="左侧切换主体，勾选该主体拥有的权限码，并设定数据范围（ALL 全部 / SHOP 本店 / SELF 本人）。保存后立即写回 sys_role_permission，并清掉该角色的权限缓存，下一次请求就按新授权校验。" />
 
       <el-radio-group v-model="currentRole" class="role-switch" @change="loadRoleRows">
         <el-radio-button v-for="r in roles" :key="r" :label="r">{{ roleText(r) }}</el-radio-button>
@@ -38,34 +38,102 @@
 
     <el-card shadow="never" class="user-card">
       <template #header>
-        <span class="title">成员角色分配（sys_user.role）</span>
+        <div class="card-header">
+          <span class="title">成员管理（sys_user）</span>
+          <el-button type="primary" size="small" @click="openCreate">新增成员</el-button>
+        </div>
       </template>
       <el-table :data="users" border size="small" stripe v-loading="userLoading">
         <el-table-column prop="username" label="账号" width="140" />
         <el-table-column prop="nickname" label="昵称" min-width="140" />
         <el-table-column prop="phone" label="手机号" width="140" />
-        <el-table-column label="主体（角色）" width="160">
+        <el-table-column label="主体（角色）" width="150">
           <template #default="{ row }">
             <el-select v-model="row.role" size="small" @change="(v: string) => changeRole(row, v)">
               <el-option v-for="r in roles" :key="r" :label="roleText(r)" :value="r" />
             </el-select>
           </template>
         </el-table-column>
+        <el-table-column label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 0 ? 'info' : 'success'" size="small">
+              {{ row.status === 0 ? '已停用' : '正常' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="lastLoginTime" label="最近登录" min-width="170" />
+        <el-table-column label="操作" width="190" align="center">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="toggleStatus(row)">
+              {{ row.status === 0 ? '启用' : '停用' }}
+            </el-button>
+            <el-button link type="warning" size="small" @click="openReset(row)">重置密码</el-button>
+          </template>
+        </el-table-column>
       </el-table>
-      <div class="hint">改完立即生效：该成员下次请求就会按新主体校验接口权限。</div>
+      <div class="hint">
+        改主体立即生效：该成员下一次请求就按新主体校验接口。停用后无法登录。
+        新增成员默认密码 <code class="code">Campus@2026</code>。
+      </div>
     </el-card>
+
+    <!-- 新增成员 -->
+    <el-dialog v-model="createVisible" title="新增成员" width="420px">
+      <el-form :model="createForm" label-width="80px">
+        <el-form-item label="账号" required>
+          <el-input v-model="createForm.username" placeholder="学号 / 手机号" />
+        </el-form-item>
+        <el-form-item label="昵称">
+          <el-input v-model="createForm.nickname" placeholder="不填则自动生成" />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="createForm.phone" placeholder="不填则同账号" />
+        </el-form-item>
+        <el-form-item label="主体" required>
+          <el-select v-model="createForm.role" style="width: 100%">
+            <el-option v-for="r in roles" :key="r" :label="roleText(r)" :value="r" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="初始密码">
+          <el-input v-model="createForm.password" placeholder="留空使用 Campus@2026" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitCreate">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 重置密码 -->
+    <el-dialog v-model="resetVisible" title="重置密码" width="380px">
+      <el-form label-width="80px">
+        <el-form-item label="账号">
+          <el-input :model-value="resetTarget?.username" disabled />
+        </el-form-item>
+        <el-form-item label="新密码" required>
+          <el-input v-model="resetPassword" placeholder="至少 6 位" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="resetVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitReset">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  createPermUser,
   permMatrix,
   permUsers,
+  resetUserPassword,
   saveRolePerms,
   updateUserRole,
+  updateUserStatus,
+  type CreateUserParams,
   type PermMatrix,
   type RolePermItem,
   type SysUserRow
@@ -113,6 +181,20 @@ const users = ref<SysUserRow[]>([])
 const loading = ref(false)
 const userLoading = ref(false)
 const saving = ref(false)
+const submitting = ref(false)
+
+const createVisible = ref(false)
+const createForm = reactive<CreateUserParams>({
+  username: '',
+  nickname: '',
+  phone: '',
+  role: 'STUDENT',
+  password: ''
+})
+
+const resetVisible = ref(false)
+const resetTarget = ref<SysUserRow | null>(null)
+const resetPassword = ref('')
 
 function roleText(role: string) {
   return ROLE_TEXT[role] ?? role
@@ -170,6 +252,68 @@ async function changeRole(row: SysUserRow, role: string) {
   await updateUserRole(row.id, role)
   ElMessage.success(`${row.username} 已设为 ${roleText(role)}`)
   await loadUsers()
+}
+
+async function toggleStatus(row: SysUserRow) {
+  const next = row.status === 0 ? 1 : 0
+  await updateUserStatus(row.id, next)
+  ElMessage.success(`${row.username} 已${next === 1 ? '启用' : '停用'}`)
+  await loadUsers()
+}
+
+function openCreate() {
+  createForm.username = ''
+  createForm.nickname = ''
+  createForm.phone = ''
+  createForm.role = 'STUDENT'
+  createForm.password = ''
+  createVisible.value = true
+}
+
+async function submitCreate() {
+  if (!createForm.username.trim()) {
+    ElMessage.warning('账号不能为空')
+    return
+  }
+  submitting.value = true
+  try {
+    const created = await createPermUser({ ...createForm })
+    if (created.defaultPassword) {
+      ElMessageBox.alert(
+        `账号 ${created.username} 初始密码为 ${created.defaultPassword}，请提醒对方首次登录后修改。`,
+        '新增成功',
+        { confirmButtonText: '知道了' }
+      )
+    } else {
+      ElMessage.success(`已新增成员 ${created.username}`)
+    }
+    createVisible.value = false
+    await loadUsers()
+  } finally {
+    submitting.value = false
+  }
+}
+
+function openReset(row: SysUserRow) {
+  resetTarget.value = row
+  resetPassword.value = ''
+  resetVisible.value = true
+}
+
+async function submitReset() {
+  if (!resetTarget.value) return
+  if (resetPassword.value.length < 6) {
+    ElMessage.warning('密码至少 6 位')
+    return
+  }
+  submitting.value = true
+  try {
+    await resetUserPassword(resetTarget.value.id, resetPassword.value)
+    ElMessage.success(`${resetTarget.value.username} 的密码已重置`)
+    resetVisible.value = false
+  } finally {
+    submitting.value = false
+  }
 }
 
 onMounted(async () => {

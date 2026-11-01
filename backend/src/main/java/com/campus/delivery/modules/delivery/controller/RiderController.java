@@ -1,5 +1,7 @@
 package com.campus.delivery.modules.delivery.controller;
 
+import com.campus.delivery.security.RequiresPerm;
+
 import com.campus.delivery.common.annotation.RateLimit;
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.api.Result;
@@ -45,18 +47,21 @@ public class RiderController {
 
     @Operation(summary = "抢单", description = "Redis 分布式锁 + 数据库条件更新，保证同一订单只有一个骑手抢到")
     @RateLimit(name = "rider:grab", limit = 30, seconds = 60, message = "抢单操作过于频繁")
+    @RequiresPerm("rider:grab")
     @PostMapping("/grab/{orderId}")
     public Result<Order> grab(@PathVariable String orderId) {
         return Result.ok(deliveryService.grab(currentRiderId(), orderId));
     }
 
     @Operation(summary = "确认取餐", description = "订单状态变更为配送中")
+    @RequiresPerm("delivery:transit")
     @PostMapping("/pickup/{orderId}")
     public Result<Order> pickup(@PathVariable String orderId) {
         return Result.ok(deliveryService.pickup(currentRiderId(), orderId));
     }
 
     @Operation(summary = "确认送达", description = "订单完成，收入累加")
+    @RequiresPerm("delivery:transit")
     @PostMapping("/deliver/{orderId}")
     public Result<Order> deliver(@PathVariable String orderId) {
         return Result.ok(deliveryService.deliver(currentRiderId(), orderId));
@@ -77,6 +82,7 @@ public class RiderController {
     }
 
     @Operation(summary = "切换工作状态", description = "0休息中 1接单中")
+    @RequiresPerm("rider:grab")
     @PutMapping("/work-status")
     public Result<Void> updateWorkStatus(@RequestParam Integer workStatus) {
         deliveryService.updateWorkStatus(currentRiderId(), workStatus);

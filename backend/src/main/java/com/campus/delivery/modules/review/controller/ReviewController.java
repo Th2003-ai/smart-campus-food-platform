@@ -1,5 +1,7 @@
 package com.campus.delivery.modules.review.controller;
 
+import com.campus.delivery.security.RequiresPerm;
+
 import com.campus.delivery.common.annotation.RateLimit;
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.api.Result;
@@ -32,6 +34,7 @@ public class ReviewController {
 
     @Operation(summary = "提交评价", description = "仅已完成的订单可评价")
     @RateLimit(name = "review:submit", limit = 5, seconds = 60, message = "评价提交过于频繁")
+    @RequiresPerm("review:write")
     @PostMapping
     @RequiresRole(RoleEnum.STUDENT)
     public Result<Review> submit(@RequestBody ReviewSubmitDTO dto) {
