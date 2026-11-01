@@ -48,12 +48,15 @@ export const useUserStore = defineStore('user', {
     /** 是否拥有某个权限码（admin:all 通配） */
     hasPerm: (state) => (code?: string) => {
       if (!code) return true
+      // 后端未下发 perms（老版本后端）时不做前端限制，交给后端 403 兜底
+      if (state.perms.length === 0) return true
       if (state.perms.includes(PERM_WILDCARD)) return true
       return state.perms.includes(code)
     },
     /** 任意一个权限码即可 */
     hasAnyPerm: (state) => (codes: string[] = []) => {
       if (!codes.length) return true
+      if (state.perms.length === 0) return true
       if (state.perms.includes(PERM_WILDCARD)) return true
       return codes.some((code) => state.perms.includes(code))
     }
