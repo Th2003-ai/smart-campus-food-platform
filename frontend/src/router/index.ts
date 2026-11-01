@@ -246,6 +246,14 @@ const routes: RouteRecordRaw[] = [
     ]
   },
 
+  // 文件上传下载演示页（独立入口，无需登录：/file-demo）
+  {
+    path: '/file-demo',
+    name: 'FileDemo',
+    component: () => import('@/views/file/FileDemo.vue'),
+    meta: { title: '文件上传下载演示' }
+  },
+
   { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('@/views/NotFound.vue') }
 ]
 

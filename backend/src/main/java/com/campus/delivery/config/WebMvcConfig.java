@@ -40,6 +40,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
             // 「评价列表公开、提交需登录」由 AuthInterceptor#PUBLIC_GET_PATHS 按方法处理。
             "/error",
             "/static/**",
+            // 文件模块（分片上传/下载）不要求登录，便于独立演示与直接下载
+            "/files/**",
             "/ws/**",
             // 接口文档
             "/doc.html",
