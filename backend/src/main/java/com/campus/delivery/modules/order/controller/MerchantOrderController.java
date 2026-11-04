@@ -45,6 +45,13 @@ public class MerchantOrderController {
         return Result.ok(orderService.shopOverview());
     }
 
+    @Operation(summary = "本店近 N 天趋势", description = "按天返回已完成订单数与营业额，无单日补 0")
+    @GetMapping("/stats/trend")
+    public Result<java.util.List<java.util.Map<String, Object>>> trend(
+            @RequestParam(defaultValue = "7") int days) {
+        return Result.ok(orderService.shopTrend(days));
+    }
+
     @Operation(summary = "接单", description = "订单状态变更为备餐中")
     @RequiresPerm("order:transit")
     @PostMapping("/{id}/accept")

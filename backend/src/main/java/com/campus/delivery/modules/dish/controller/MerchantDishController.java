@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 商户端菜品管理接口。主责：成员2。
@@ -69,6 +70,28 @@ public class MerchantDishController {
     @GetMapping("/dish-categories")
     public Result<List<DishCategory>> categories(@RequestParam String shopId) {
         return Result.ok(dishService.listCategories(shopId));
+    }
+
+    @Operation(summary = "店内热销榜", description = "近 N 天成交件数 TopN，Redis ZSet 缓存 5 分钟")
+    @RequiresPerm("dish:read")
+    @GetMapping("/dishes/top")
+    public Result<List<Map<String, Object>>> topDishes(@RequestParam(defaultValue = "30") int days,
+                                                       @RequestParam(defaultValue = "5") int limit) {
+        return Result.ok(dishService.shopTopDishes(days, limit));
+    }
+
+    @Operation(summary = "批量上下架", description = "body: {ids: [...], status: 0|1}")
+    @RequiresPerm("dish:write")
+    @PutMapping("/dishes/batch-status")
+    public Result<Integer> batchStatus(@RequestBody BatchStatusRequest form) {
+        return Result.ok(dishService.batchUpdateStatus(form.getIds(), form.getStatus()));
+    }
+
+    /** 批量上下架入参 */
+    @lombok.Data
+    public static class BatchStatusRequest {
+        private java.util.List<String> ids;
+        private Integer status;
     }
 
     /**

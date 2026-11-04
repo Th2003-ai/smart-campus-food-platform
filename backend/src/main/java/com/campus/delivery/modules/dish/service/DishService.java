@@ -13,11 +13,16 @@ import com.campus.delivery.modules.shop.service.ShopService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -41,6 +46,9 @@ public class DishService {
     /** 菜品详情缓存有效期（分钟） */
     private static final long CACHE_MINUTES = 10L;
 
+    /** 店内热销榜缓存有效期（分钟），看板级别数据，允许短暂旧值 */
+    private static final long MERCHANT_HOT_MINUTES = 5L;
+
     private final DishMapper dishMapper;
     private final DishCategoryMapper dishCategoryMapper;
     private final ShopService shopService;
@@ -63,7 +71,7 @@ public class DishService {
     // ------------------------------------------------------------------
     // 场景 1（PPT 第 13 页）：菜品详情缓存
     //   结构：String(JSON) —— cache:dish:detail:{dishId}
-    //   过期：10 分钟，加 ±20% 抖动（实测 540~660 秒），防缓存雪崩
+    //   过期：10 分钟，加 ±20% 抖动（实测 480~720 秒），防缓存雪崩
     //   防击穿：SETNX 抢 lock:dish:cache:{dishId}（5 秒），只允许一个线程回源重建
     //   一致性：读时回填 + 写后删缓存（先写库、再 delete 缓存，不是 update）
     // ------------------------------------------------------------------
@@ -216,6 +224,101 @@ public class DishService {
         dishMapper.updateById(dish);
         evictCache(dishId);
         hotRankService.touchDishRank(dish);
+    }
+
+    /**
+     * 批量上下架（商户端菜品列表的批量操作）。
+     *
+     * <p>逐个走 {@link #updateStatus(String, Integer)} 同一套逻辑：校验归属 → 改状态 →
+     * 删详情缓存 → 失效平台榜单。不用 UPDATE ... WHERE id IN (...) 一把梭，是因为
+     * 归属校验和缓存失效都得按行做，批量 SQL 省下的那点往返不值当换来一串漏删的缓存。
+     *
+     * @return 实际处理的菜品数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int batchUpdateStatus(List<String> dishIds, Integer status) {
+        if (dishIds == null || dishIds.isEmpty()) {
+            throw new BusinessException(20016, "请先勾选菜品");
+        }
+        if (status == null || (status != 0 && status != 1)) {
+            throw new BusinessException(20017, "状态只能是 1（上架）或 0（下架）");
+        }
+        if (dishIds.size() > 100) {
+            throw new BusinessException(20018, "一次最多操作 100 个菜品");
+        }
+        String shopId = shopService.currentShopId();
+        int done = 0;
+        for (String dishId : dishIds) {
+            Dish dish = requireOwnDish(dishId, shopId);
+            dish.setStatus(status);
+            dishMapper.updateById(dish);
+            evictCache(dishId);
+            hotRankService.touchDishRank(dish);
+            done++;
+        }
+        log.info("批量上下架: shopId={}, status={}, 共{}个", shopId, status, done);
+        return done;
+    }
+
+    /**
+     * 店内热销榜（近 N 天，按成交件数排序）。
+     *
+     * <p>与平台级热销榜的区别：粒度是「一家店」，商户看的是自己哪几道菜卖得动。
+     * 数据量小（一店几十道菜）、时效要求低（看板级别），因此策略是
+     * <b>Redis ZSet 缓存 + 5 分钟 TTL（±20% 抖动）</b>，而不是每一单去实时维护排行——
+     * 后者要多写一次 Redis，且和订单事务耦合，一笔单失败就带崩下单主流程。
+     *
+     * <p>ZSet 只存 {@code member=dishId / score=销量}，菜名回表一次（≤20 行），
+     * 避免像平台榜那样再维护一份明细快照：单个店铺的 TopN 回表代价可以忽略。
+     */
+    public List<Map<String, Object>> shopTopDishes(int days, int limit) {
+        String shopId = shopService.currentShopId();
+        int span = Math.max(1, Math.min(days, 30));
+        int top = Math.max(1, Math.min(limit, 20));
+        String key = RedisKeys.MERCHANT_HOT_DISH + shopId;
+        ZSetOperations<String, Object> zset = redisTemplate.opsForZSet();
+
+        Set<ZSetOperations.TypedTuple<Object>> cached = zset.reverseRangeWithScores(key, 0, top - 1);
+        if (cached != null && !cached.isEmpty()) {
+            List<Map<String, Object>> list = new ArrayList<>(cached.size());
+            int rank = 1;
+            for (ZSetOperations.TypedTuple<Object> tuple : cached) {
+                if (tuple.getValue() == null) {
+                    continue;
+                }
+                Dish dish = dishMapper.selectById(String.valueOf(tuple.getValue()));
+                if (dish == null) {
+                    // 菜品被删了但榜单里还留着 ID：跳过，等 TTL 到期自然收敛
+                    continue;
+                }
+                list.add(rankItem(rank++, dish.getId(), dish.getDishName(),
+                        tuple.getScore() == null ? 0 : tuple.getScore().longValue()));
+            }
+            return list;
+        }
+
+        List<Map<String, Object>> rows = dishMapper.selectShopDishSales(shopId, span, top);
+        List<Map<String, Object>> list = new ArrayList<>(rows.size());
+        int rank = 1;
+        for (Map<String, Object> row : rows) {
+            long qty = row.get("qty") == null ? 0L : ((Number) row.get("qty")).longValue();
+            String dishId = String.valueOf(row.get("dishId"));
+            list.add(rankItem(rank++, dishId, String.valueOf(row.get("dishName")), qty));
+            zset.add(key, dishId, qty);
+        }
+        // 空结果也缓存（不存在的店铺不该每次都被打库），交给 TTL 收敛
+        redisTemplate.expire(key, jitterMinutes(MERCHANT_HOT_MINUTES), TimeUnit.MINUTES);
+        log.info("店内热销榜回源: shopId={}, days={}, 命中{}条", shopId, span, list.size());
+        return list;
+    }
+
+    private Map<String, Object> rankItem(int rank, String dishId, String dishName, long qty) {
+        Map<String, Object> item = new HashMap<>(4);
+        item.put("rank", rank);
+        item.put("dishId", dishId);
+        item.put("dishName", dishName);
+        item.put("qty", qty);
+        return item;
     }
 
     /**
