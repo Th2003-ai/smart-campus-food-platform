@@ -53,4 +53,31 @@ public interface DishMapper extends BaseMapper<Dish> {
             + "ORDER BY monthly_sales DESC LIMIT #{limit}"
             + "</script>")
     List<Dish> searchByKeyword(@Param("keyword") String keyword, @Param("shopId") String shopId, @Param("limit") int limit);
+
+    /**
+     * 本店近 N 天销量排行（商户端经营看板）。
+     *
+     * <p>口径是「已支付且未退款的订单行」，按菜品聚合成交件数，用于：
+     * <ol>
+     *   <li>回填 Redis 店内热销榜 {@code cache:merchant:hot:{shopId}}；</li>
+     *   <li>缓存未命中时直接展示给商户。</li>
+     * </ol>
+     *
+     * @param shopId 店铺 ID
+     * @param days   统计天数（含今天）
+     * @param limit  取前几条
+     */
+    @Select("SELECT d.id AS dishId, d.dish_name AS dishName, "
+            + "IFNULL(SUM(oi.quantity), 0) AS qty "
+            + "FROM order_item oi "
+            + "JOIN orders o ON o.id = oi.order_id "
+            + "JOIN dish d ON d.id = oi.dish_id "
+            + "WHERE o.shop_id = #{shopId} AND o.pay_status = 1 "
+            + "  AND o.create_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY) "
+            + "GROUP BY d.id, d.dish_name "
+            + "ORDER BY qty DESC, d.id ASC "
+            + "LIMIT #{limit}")
+    List<java.util.Map<String, Object>> selectShopDishSales(@Param("shopId") String shopId,
+                                                            @Param("days") int days,
+                                                            @Param("limit") int limit);
 }

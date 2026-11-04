@@ -1,5 +1,7 @@
 package com.campus.delivery.modules.order.controller;
 
+import com.campus.delivery.security.RequiresPerm;
+
 import com.campus.delivery.common.annotation.RateLimit;
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.api.Result;
@@ -34,6 +36,7 @@ public class OrderController {
 
     @Operation(summary = "提交订单", description = "购物车结算 + 模拟支付")
     @RateLimit(name = "order:create", limit = 10, seconds = 60, message = "下单过于频繁")
+    @RequiresPerm("order:write")
     @PostMapping
     @RequiresRole(RoleEnum.STUDENT)
     public Result<OrderVO> create(@RequestBody CreateOrderRequest request,
@@ -56,6 +59,7 @@ public class OrderController {
     }
 
     @Operation(summary = "取消订单", description = "仅待接单状态可取消，取消后回补库存")
+    @RequiresPerm("order:write")
     @PostMapping("/{id}/cancel")
     @RequiresRole(RoleEnum.STUDENT)
     public Result<Void> cancel(@PathVariable String id, @RequestParam(required = false) String reason) {
@@ -72,6 +76,7 @@ public class OrderController {
      * <p>仅对 deliveryType=2（宿舍楼下自取）有效；骑手配送的订单必须走骑手送达。
      */
     @Operation(summary = "自取订单确认取餐", description = "下单学生或店铺商户均可操作，谁先点谁生效")
+    @RequiresPerm("order:transit")
     @PostMapping("/{id}/pickup")
     @RequiresRole({RoleEnum.STUDENT, RoleEnum.MERCHANT})
     public Result<Void> confirmPickup(@PathVariable String id) {

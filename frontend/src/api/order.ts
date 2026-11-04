@@ -117,6 +117,13 @@ export function getShopStats() {
   return get<Record<string, number>>('/merchant/orders/stats')
 }
 
+/** 本店近 N 天经营趋势：按天返回订单数与营业额，无单日补 0 */
+export function getShopTrend(days = 7) {
+  return get<Array<{ date: string; orders: number; sales: number }>>('/merchant/orders/stats/trend', {
+    days
+  })
+}
+
 export function acceptOrder(id: string) {
   return post<Order>(`/merchant/orders/${id}/accept`)
 }

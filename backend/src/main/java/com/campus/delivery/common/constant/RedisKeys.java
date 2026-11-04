@@ -45,6 +45,14 @@ public final class RedisKeys {
     /** 店铺详情缓存：cache:shop:detail:{shopId} */
     public static final String SHOP_DETAIL = "cache:shop:detail:";
 
+    /**
+     * 店内热销榜：cache:merchant:hot:{shopId}（有序集合，score 为最近 30 天销量）
+     *
+     * <p>商户端经营看板用。粒度是「一家店」，与平台级 {@link #HOT_DISH} 不同：
+     * 平台榜看重全站热销，店内榜只看自己卖得最好的几道菜。
+     */
+    public static final String MERCHANT_HOT_DISH = "cache:merchant:hot:";
+
     /** 骑手抢单池（有序集合，score 为出餐时间，保证先出餐先被看到） */
     public static final String GRAB_POOL = "delivery:grab:pool";
 

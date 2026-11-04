@@ -56,6 +56,20 @@ public interface OrderMapper extends BaseMapper<Order> {
     Map<String, Object> statShopOverview(@Param("shopId") String shopId);
 
     /**
+     * 商户端「近 N 天经营趋势」：本店每日订单数与营业额。
+     *
+     * <p>只统计已完成（{@code order_status = 4}）的订单，与
+     * {@link #statDailyTrend(int)} 的口径保持一致，避免「下单未接单」把营业额做大。
+     * 没有订单的日期不会出现在结果里，由 Service 补零，前端画图才不会缺柱子。
+     */
+    @Select("SELECT DATE(create_time) AS statDate, COUNT(*) AS orderCount, "
+            + "IFNULL(SUM(total_amount), 0) AS salesAmount "
+            + "FROM orders WHERE shop_id = #{shopId} AND order_status = 4 "
+            + "AND create_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY) "
+            + "GROUP BY DATE(create_time) ORDER BY statDate")
+    List<Map<String, Object>> statShopTrend(@Param("shopId") String shopId, @Param("days") int days);
+
+    /**
      * 把订单标记为已退款（退款闸门）。
      *
      * <p>用条件更新而不是「先查后改」：只有 {@code pay_status} 还是 1（已支付）时才会

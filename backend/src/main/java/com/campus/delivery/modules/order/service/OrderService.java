@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -497,6 +498,34 @@ public class OrderService {
      */
     public Map<String, Object> shopOverview() {
         return orderMapper.statShopOverview(shopService.currentShopId());
+    }
+
+    /**
+     * 商户端「近 N 天经营趋势」。
+     *
+     * <p>数据库只在有订单的日期返回行，这里按自然日补齐 0：
+     * 少一天的柱子比直接缺一根更容易被误读成「接口挂了」。
+     *
+     * @param days 天数，限制在 1~30，防止前端传个 3650 把库扫穿
+     */
+    public List<Map<String, Object>> shopTrend(int days) {
+        int span = Math.max(1, Math.min(days, 30));
+        Map<String, Map<String, Object>> byDate = new HashMap<>();
+        for (Map<String, Object> row : orderMapper.statShopTrend(shopService.currentShopId(), span)) {
+            byDate.put(String.valueOf(row.get("statDate")), row);
+        }
+        List<Map<String, Object>> trend = new ArrayList<>(span);
+        LocalDate today = LocalDate.now();
+        for (int i = span - 1; i >= 0; i--) {
+            String date = today.minusDays(i).toString();
+            Map<String, Object> hit = byDate.get(date);
+            Map<String, Object> item = new HashMap<>(4);
+            item.put("date", date);
+            item.put("orders", hit == null ? 0 : hit.get("orderCount"));
+            item.put("sales", hit == null ? 0 : hit.get("salesAmount"));
+            trend.add(item);
+        }
+        return trend;
     }
 
     /** 平台级订单总量（数据看板核心指标） */
