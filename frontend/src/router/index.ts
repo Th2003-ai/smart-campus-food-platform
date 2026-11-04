@@ -254,6 +254,14 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '文件上传下载演示' }
   },
 
+  // 缓存演示页（PPT 新增页对照：三兄弟 / 热 key / 静态字典），仅管理员
+  {
+    path: '/cache-demo',
+    name: 'CacheDemo',
+    component: () => import('@/views/cache/CacheDemo.vue'),
+    meta: { title: '缓存演示', role: 'ADMIN' }
+  },
+
   { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('@/views/NotFound.vue') }
 ]
 

@@ -42,6 +42,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
             "/static/**",
             // 文件模块（分片上传/下载）不要求登录，便于独立演示与直接下载
             "/files/**",
+            // 字典数据（分类/配置）公开只读，PPT 第 21 页演示用
+            "/dicts/**",
             "/ws/**",
             // 接口文档
             "/doc.html",

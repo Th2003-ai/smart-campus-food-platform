@@ -31,6 +31,17 @@ public final class RedisKeys {
     /** 菜品详情缓存：cache:dish:detail:{dishId} */
     public static final String DISH_DETAIL = "cache:dish:detail:";
 
+    /**
+     * 菜品空值缓存（防穿透）：cache:dish:null:{dishId}
+     *
+     * <p>查不到的 ID 也缓存一个短 TTL 标记（60 秒），
+     * 同一个假 ID 被反复请求时，第二次开始不再打库。
+     */
+    public static final String DISH_NULL = "cache:dish:null:";
+
+    /** 字典/配置缓存（PPT 第 21 页）：cache:dict:{name} */
+    public static final String DICT_CACHE = "cache:dict:";
+
     /** 店铺详情缓存：cache:shop:detail:{shopId} */
     public static final String SHOP_DETAIL = "cache:shop:detail:";
 

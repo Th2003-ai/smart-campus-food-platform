@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.delivery.common.constant.RedisKeys;
 import com.campus.delivery.common.exception.BusinessException;
+import com.campus.delivery.modules.cache.service.CacheSwitch;
+import com.campus.delivery.modules.cache.service.HotKeyTracker;
 import com.campus.delivery.modules.dish.entity.Dish;
 import com.campus.delivery.modules.dish.entity.DishCategory;
 import com.campus.delivery.modules.dish.mapper.DishCategoryMapper;
@@ -46,6 +48,10 @@ public class DishService {
     private final ShopService shopService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final HotRankService hotRankService;
+    /** 热 key 探测：记录每个缓存 key 的访问次数（PPT 第 15 页） */
+    private final HotKeyTracker hotKeyTracker;
+    /** 缓存策略运行期开关（答辩演示对比用） */
+    private final CacheSwitch cacheSwitch;
 
     // ------------------------------------------------------------------
     // 浏览与检索
@@ -61,65 +67,170 @@ public class DishService {
     }
 
     // ------------------------------------------------------------------
-    // 场景 1（PPT 第 13 页）：菜品详情缓存
+    // 场景 1（PPT 第 13 页）：菜品详情缓存 —— 缓存三兄弟的完整对策
     //   结构：String(JSON) —— cache:dish:detail:{dishId}
-    //   过期：10 分钟，加 ±20% 抖动（实测 540~660 秒），防缓存雪崩
-    //   防击穿：SETNX 抢 lock:dish:cache:{dishId}（5 秒），只允许一个线程回源重建
-    //   一致性：读时回填 + 写后删缓存（先写库、再 delete 缓存，不是 update）
+    //   过期：10 分钟 ±20% 抖动（防雪崩）
+    //   防击穿：SETNX lock:dish:cache:{dishId}（5 秒）+ 双重检查
+    //   防穿透：不存在的菜品缓存空值标记 cache:dish:null:{dishId}（60 秒）
+    //   降级：Redis 不可用时直查数据库，只牺牲性能、不牺牲可用性
+    //   一致性：读时回填 + 写后删缓存（先写库、再 delete）
     // ------------------------------------------------------------------
     /**
      * 菜品详情（热点缓存）。
      *
-     * <p>Cache-Aside：读时回填、写时删除（见 {@link #evictCache}）。
-     *
-     * <p>防缓存击穿：热点 key 过期瞬间若大量请求同时未命中，会一起压到数据库。
-     * 这里用 Redis 互斥锁（{@code SET NX EX}）保证同一菜品只有一个线程回源重建，
-     * 其余线程短暂等待后直接读新缓存；拿不到锁时也会兜底查库，不会死等。
+     * <p>读路径按「空值标记 → 详情缓存 → 互斥重建 → 查库兜底」四步走：
+     * <ol>
+     *   <li><b>穿透</b>：库里也不存在的 ID 会缓存 60 秒空值标记，短时间重复请求不再打库；</li>
+     *   <li><b>击穿</b>：热点 key 过期瞬间用 {@code SET NX EX} 只放一个线程回源，其余短暂等待后读新缓存；</li>
+     *   <li><b>雪崩</b>：TTL 加 ±20% 抖动，把过期时间打散；</li>
+     *   <li><b>降级</b>：Redis 抛异常时记 warn 并直查数据库，不把缓存故障放大成接口 500。</li>
+     * </ol>
      */
     public Dish getDetail(String dishId) {
         String cacheKey = RedisKeys.DISH_DETAIL + dishId;
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
-        if (cached instanceof Dish dish) {
-            return dish;
+        String nullKey = RedisKeys.DISH_NULL + dishId;
+        hotKeyTracker.record(cacheKey);
+
+        // Redis 熔断期内：直接查库，不再尝试缓存（避免每个请求都等一次超时）
+        if (!cacheSwitch.isRedisAvailable()) {
+            return loadAndCache(dishId, cacheKey, nullKey);
         }
 
-        String lockKey = RedisKeys.LOCK_DISH_CACHE + dishId;
-        boolean locked = Boolean.TRUE.equals(redisTemplate.opsForValue()
-                .setIfAbsent(lockKey, "1", 5, TimeUnit.SECONDS));
-        if (locked) {
-            try {
-                // 双重检查：等锁期间可能已有其他线程完成回填
-                Object again = redisTemplate.opsForValue().get(cacheKey);
-                if (again instanceof Dish dish) {
-                    return dish;
-                }
-                Dish dish = dishMapper.selectById(dishId);
-                if (dish == null) {
-                    throw new BusinessException(CODE_DISH_NOT_FOUND, "菜品不存在");
-                }
-                redisTemplate.opsForValue().set(cacheKey, dish,
-                        jitterMinutes(CACHE_MINUTES), TimeUnit.MINUTES);
+        long redisCallStart = System.currentTimeMillis();
+        boolean redisAvailable = true;
+
+        try {
+            // ① 防穿透：空值标记命中，直接返回，不打库（可被演示开关关闭）
+            if (isNullCached(nullKey)) {
+                throw dishNotFound();
+            }
+            // ② 详情缓存命中
+            Object cached = redisTemplate.opsForValue().get(cacheKey);
+            cacheSwitch.markRedisUp();      // 读成功说明 Redis 已恢复，解除熔断
+            if (cached instanceof Dish dish) {
                 return dish;
-            } finally {
-                redisTemplate.delete(lockKey);
+            }
+        } catch (BusinessException e) {
+            throw e;    // 空值标记属于正常业务拒绝，不是缓存故障
+        } catch (Exception e) {
+            // ③ 降级：Redis 不可用，直接查库，并熔断 30 秒
+            redisAvailable = false;
+            cacheSwitch.markRedisDown(System.currentTimeMillis() - redisCallStart);
+            log.warn("Redis 不可用，降级直查数据库: key={}, err={}", cacheKey, e.getMessage());
+        }
+
+        if (redisAvailable) {
+            String lockKey = RedisKeys.LOCK_DISH_CACHE + dishId;
+            boolean locked = false;
+            try {
+                locked = Boolean.TRUE.equals(redisTemplate.opsForValue()
+                        .setIfAbsent(lockKey, "1", 5, TimeUnit.SECONDS));
+            } catch (Exception e) {
+                redisAvailable = false;
+                log.warn("抢缓存重建锁失败，降级直查数据库: {}", e.getMessage());
+            }
+
+            if (redisAvailable && locked) {
+                try {
+                    // 双重检查：等锁期间可能已有其他线程完成回填
+                    Object again = redisTemplate.opsForValue().get(cacheKey);
+                    if (again instanceof Dish dish) {
+                        return dish;
+                    }
+                    return loadAndCache(dishId, cacheKey, nullKey);
+                } finally {
+                    safeDelete(lockKey);
+                }
+            }
+
+            if (redisAvailable) {
+                // 未抢到锁：短暂等待让持锁线程写完缓存，再读一次；仍未命中则查库兜底
+                sleepQuietly(50L);
+                // 等锁期间别人可能已经确认「这个 ID 不存在」并写了空值标记，
+                // 这里必须再查一次，否则等待的线程会一起回源（实测能从 22 次降到 1 次）
+                if (isNullCached(nullKey)) {
+                    throw dishNotFound();
+                }
+                try {
+                    Object retry = redisTemplate.opsForValue().get(cacheKey);
+                    if (retry instanceof Dish dish) {
+                        return dish;
+                    }
+                } catch (Exception ignore) {
+                    // 读失败就走下面的查库兜底
+                }
             }
         }
 
-        // 未抢到锁：稍等让持锁线程写完缓存，再读一次；仍未命中则直接查库兜底
+        // ④ 最终兜底：直接查库（也是 Redis 故障时唯一的路径）
+        return loadAndCache(dishId, cacheKey, nullKey);
+    }
+
+    /** 查库 → 回填缓存；库里也没有就写空值标记（防穿透） */
+    private Dish loadAndCache(String dishId, String cacheKey, String nullKey) {
+        Dish dish = dishMapper.selectById(dishId);
+        if (dish == null) {
+            cacheNullValue(nullKey);
+            throw dishNotFound();
+        }
+        safeSet(cacheKey, dish);
+        return dish;
+    }
+
+    private BusinessException dishNotFound() {
+        return new BusinessException(CODE_DISH_NOT_FOUND, "菜品不存在");
+    }
+
+    /** 是否命中「空值标记」（Redis 异常或熔断时按未命中处理，走查库兜底） */
+    private boolean isNullCached(String nullKey) {
+        if (!cacheSwitch.isNullValueCacheEnabled() || !cacheSwitch.isRedisAvailable()) {
+            return false;
+        }
         try {
-            Thread.sleep(50L);
+            return Boolean.TRUE.equals(redisTemplate.hasKey(nullKey));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 空值缓存 60 秒：同一个假 ID 短时间内反复请求不会再打库 */
+    private void cacheNullValue(String nullKey) {
+        if (!cacheSwitch.isNullValueCacheEnabled() || !cacheSwitch.isRedisAvailable()) {
+            return;   // 演示「关闭防穿透」或 Redis 熔断时故意不写
+        }
+        try {
+            redisTemplate.opsForValue().set(nullKey, "1", 60, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.debug("写空值缓存失败（忽略）: {}", e.getMessage());
+        }
+    }
+
+    private void safeSet(String cacheKey, Dish dish) {
+        if (!cacheSwitch.isRedisAvailable()) {
+            return;
+        }
+        try {
+            redisTemplate.opsForValue().set(cacheKey, dish,
+                    jitterMinutes(CACHE_MINUTES), TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.warn("回填缓存失败（忽略，不影响本次返回）: {}", e.getMessage());
+        }
+    }
+
+    private void safeDelete(String key) {
+        try {
+            redisTemplate.delete(key);
+        } catch (Exception e) {
+            log.debug("删除缓存 key 失败（忽略）: {}", e.getMessage());
+        }
+    }
+
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        Object retry = redisTemplate.opsForValue().get(cacheKey);
-        if (retry instanceof Dish dish) {
-            return dish;
-        }
-        Dish dish = dishMapper.selectById(dishId);
-        if (dish == null) {
-            throw new BusinessException(CODE_DISH_NOT_FOUND, "菜品不存在");
-        }
-        return dish;
     }
 
     /** 关键词检索：AI 语义搜索的降级兜底 */
