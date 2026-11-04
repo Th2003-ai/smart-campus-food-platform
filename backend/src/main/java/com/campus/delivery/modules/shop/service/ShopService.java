@@ -13,6 +13,8 @@ import com.campus.delivery.modules.shop.mapper.ShopMapper;
 import com.campus.delivery.modules.user.service.UserService;
 import com.campus.delivery.security.UserContext;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,7 @@ import java.util.concurrent.TimeUnit;
  *   <li>商户端所有操作通过 {@link #currentMerchantId()} 取本店，禁止前端传 merchantId。</li>
  * </ul>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ShopService {
@@ -70,15 +73,27 @@ public class ShopService {
     /** 店铺详情（热点缓存，减少数据库压力） */
     public Shop getDetail(String shopId) {
         String cacheKey = RedisKeys.SHOP_DETAIL + shopId;
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
-        if (cached instanceof Shop shop) {
+        try {
+            Object cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached instanceof Shop shop) {
+                return shop;
+            }
+            Shop shop = loadOrThrow(shopId);
+            redisTemplate.opsForValue().set(cacheKey, shop, 10, TimeUnit.MINUTES);
             return shop;
+        } catch (DataAccessException e) {
+            // 降级：Redis 不可用时业务仍要能用，只是变慢（PPT 第 18 页 ②）
+            log.warn("Redis 不可用，店铺详情降级直查数据库: shopId={}, cause={}", shopId, e.getMessage());
+            return loadOrThrow(shopId);
         }
+    }
+
+    /** 查库，不存在则抛业务异常 */
+    private Shop loadOrThrow(String shopId) {
         Shop shop = shopMapper.selectById(shopId);
         if (shop == null) {
             throw new BusinessException(20001, "店铺不存在");
         }
-        redisTemplate.opsForValue().set(cacheKey, shop, 10, TimeUnit.MINUTES);
         return shop;
     }
 
