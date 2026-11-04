@@ -35,6 +35,61 @@ ADMIN_PWD = "Adm@Campus#2026"
 
 TOKEN = None
 
+# 复用的 mysql 长连接：避免「每读一次计数器就新建一次连接」带来的 +1 污染
+_MYSQL_PROC = None
+
+
+def mysql_env():
+    env = os.environ.copy()
+    env["MYSQL_PWD"] = MYSQL_PWD
+    return env
+
+
+def _persistent_mysql():
+    """起一个常驻的 mysql 客户端，后续所有读数都复用它（只算一次连接开销）"""
+    global _MYSQL_PROC
+    if _MYSQL_PROC is None or _MYSQL_PROC.poll() is not None:
+        _MYSQL_PROC = subprocess.Popen(
+            # -n/--unbuffered：每条语句执行后立刻 flush，
+            # 否则 stdout 是管道时会被全缓冲，readline() 读不到结果
+            [MYSQL, "-u", MYSQL_USER, "-N", "-B", "-n"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=mysql_env(),
+            bufsize=1,
+        )
+    return _MYSQL_PROC
+
+
+def com_select():
+    """读 MySQL 全局 SELECT 计数。
+
+    ⚠ 口径提醒：mysql 客户端每次**新建连接**都会执行一次 `select @@version_comment`，
+    这会被计入 Com_select。所以这里复用同一个长连接，
+    把「测量工具自身」的污染从「每次读数 +1」降到「全程只 +1」。
+    """
+    proc = _persistent_mysql()
+    proc.stdin.write("SHOW GLOBAL STATUS LIKE 'Com_select';\n")
+    proc.stdin.flush()
+    line = proc.stdout.readline().strip()
+    for _ in range(3):
+        if line.startswith("Com_select"):
+            break
+        line = proc.stdout.readline().strip()
+    if not line.startswith("Com_select"):
+        # 长连接异常时退回「一次性调用」，保证脚本还能跑
+        out, err = run([MYSQL, "-u", MYSQL_USER, "-N", "-B",
+                        "-e", "SHOW GLOBAL STATUS LIKE 'Com_select'"], env=mysql_env())
+        for row in out.splitlines():
+            if row.startswith("Com_select"):
+                return int(row.split("\t")[1])
+        raise RuntimeError(f"读不到 Com_select：{line} {out} {err}")
+    return int(line.split("\t")[1])
+
 
 # ---------------------------------------------------------------- 基础工具
 def run(cmd, env=None):
@@ -47,19 +102,6 @@ def mysql_env():
     env = os.environ.copy()
     env["MYSQL_PWD"] = MYSQL_PWD
     return env
-
-
-def com_select():
-    """读 MySQL 全局 SELECT 计数"""
-    out, err = run(
-        [MYSQL, "-u", MYSQL_USER, "-N", "-B",
-         "-e", "SHOW GLOBAL STATUS LIKE 'Com_select'"],
-        env=mysql_env(),
-    )
-    for line in out.splitlines():
-        if line.startswith("Com_select"):
-            return int(line.split("\t")[1])
-    raise RuntimeError(f"读不到 Com_select：{out} {err}")
 
 
 def query_column(sql):
