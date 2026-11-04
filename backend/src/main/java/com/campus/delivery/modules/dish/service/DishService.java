@@ -19,7 +19,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -275,6 +278,113 @@ public class DishService {
                 .eq(StringUtils.hasText(categoryId), Dish::getCategoryId, categoryId)
                 .eq(status != null, Dish::getStatus, status)
                 .orderByDesc(Dish::getCreateTime));
+    }
+
+    /**
+     * 本店近 N 天热销榜（商户端经营看板）。
+     *
+     * <p>数据源是 {@link DishMapper#selectShopDishSales}（按 {@code order_item} 聚合成交件数），
+     * 结果缓存 5 分钟；下单/退款后由榜单失效逻辑清掉。
+     *
+     * <p>注意：只统计本店、已支付且未退款的订单行，所以它和「平台热销榜」
+     * （{@code cache:dish:hot}）是两个口径，不能混用。
+     *
+     * @param days  统计天数，会被夹在 1~365
+     * @param limit 取前几条，会被夹在 1~50
+     */
+    public List<Map<String, Object>> shopTopDishes(int days, int limit) {
+        String shopId = shopService.currentShopId();
+        int safeDays = Math.max(1, Math.min(days, 365));
+        int safeLimit = Math.max(1, Math.min(limit, 50));
+        String cacheKey = RedisKeys.MERCHANT_HOT_DISH + shopId + ":" + safeDays + ":" + safeLimit;
+
+        if (cacheSwitch.isRedisAvailable()) {
+            try {
+                Object cached = redisTemplate.opsForValue().get(cacheKey);
+                if (cached instanceof List<?> list) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> rows = (List<Map<String, Object>>) list;
+                    return withRank(rows);
+                }
+            } catch (Exception e) {
+                log.warn("读店内热销榜缓存失败，直接查库: {}", e.getMessage());
+            }
+        }
+
+        List<Map<String, Object>> rows = withRank(
+                dishMapper.selectShopDishSales(shopId, safeDays, safeLimit));
+        if (cacheSwitch.isRedisAvailable()) {
+            try {
+                redisTemplate.opsForValue().set(cacheKey, rows, 5, TimeUnit.MINUTES);
+            } catch (Exception e) {
+                log.warn("回填店内热销榜缓存失败（忽略）: {}", e.getMessage());
+            }
+        }
+        return rows;
+    }
+
+    /**
+     * 给榜单补上名次字段 {@code rank}（1 开始）。
+     *
+     * <p>前端 {@code merchant/Dashboard.vue} 的热销榜要显示「1 2 3」，
+     * 而 SQL 只返回 dishId / dishName / qty，所以统一在服务层补，
+     * 缓存里存的也是补好名次的结果，避免前端各算一遍。
+     */
+    private List<Map<String, Object>> withRank(List<Map<String, Object>> rows) {
+        List<Map<String, Object>> ranked = new ArrayList<>(rows.size());
+        int index = 1;
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> item = new LinkedHashMap<>(row);
+            item.put("rank", index++);
+            ranked.add(item);
+        }
+        return ranked;
+    }
+
+    /**
+     * 批量上下架（商户端）。
+     *
+     * <p>只处理「自己的菜品」：别人的 ID、已删除的 ID 直接跳过，不报错；
+     * 已经是目标状态的也跳过，返回真正变更的条数。
+     *
+     * @param ids    菜品 ID 列表
+     * @param status 0 下架 / 1 上架
+     * @return 实际变更条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int batchUpdateStatus(List<String> ids, Integer status) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        if (status == null || (status != 0 && status != 1)) {
+            throw new BusinessException(20015, "状态只能是 0（下架）或 1（上架）");
+        }
+        String shopId = shopService.currentShopId();
+        int changed = 0;
+        for (String id : ids) {
+            if (!StringUtils.hasText(id)) {
+                continue;
+            }
+            Dish dish = dishMapper.selectById(id);
+            if (dish == null || !shopId.equals(dish.getShopId())) {
+                continue;   // 不存在或不属于本店，跳过
+            }
+            if (status.equals(dish.getStatus())) {
+                continue;   // 已经是目标状态
+            }
+            Dish update = new Dish();
+            update.setId(id);
+            update.setStatus(status);
+            if (dishMapper.updateById(update) > 0) {
+                changed++;
+                evictCache(id);
+            }
+        }
+        if (changed > 0) {
+            hotRankService.invalidateDishRank();
+            log.info("批量上下架: shopId={}, status={}, 变更 {} 条", shopId, status, changed);
+        }
+        return changed;
     }
 
     /** 新增或修改菜品 */

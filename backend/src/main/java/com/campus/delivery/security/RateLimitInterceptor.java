@@ -138,4 +138,25 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         }
         return request.getRemoteAddr();
     }
+
+    /**
+     * 清掉当前窗口的计数（登录成功后调用）。
+     *
+     * <p>目的：正常用户不该被自己之前的失败尝试连累。
+     * 例如演示时先输错一次密码、再输对，若不清零，剩下的次数会越来越少，
+     * 四个角色来回切换几次就被锁死（表现为「登录尝试过于频繁」）。
+     *
+     * @param name    注解里的限流名字，需与 {@link RateLimit#name()} 一致
+     * @param by      计数主体类型，需与注解里的 {@link RateLimit#by()} 一致
+     * @param seconds 窗口长度，需与注解里的 {@link RateLimit#seconds()} 一致
+     */
+    public void reset(HttpServletRequest request, String name, LimitBy by, int seconds) {
+        try {
+            long windowIndex = System.currentTimeMillis() / 1000L / Math.max(1, seconds);
+            String subject = resolveSubject(request, by);
+            stringRedisTemplate.delete(RedisKeys.RATE_LIMIT + name + ":" + subject + ":" + windowIndex);
+        } catch (Exception e) {
+            log.debug("重置限流计数失败（忽略）: {}", e.getMessage());
+        }
+    }
 }
