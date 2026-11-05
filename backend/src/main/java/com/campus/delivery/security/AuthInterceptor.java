@@ -1,6 +1,7 @@
 package com.campus.delivery.security;
 
 import com.campus.delivery.common.api.ResultCode;
+import com.campus.delivery.modules.admin.service.PermissionService;
 import com.campus.delivery.common.exception.BusinessException;
 import com.campus.delivery.modules.user.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,6 +38,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtUtils jwtUtils;
     private final AuthService authService;
+    private final PermissionService permissionService;
 
     @Value("${campus.jwt.header:Authorization}")
     private String tokenHeader;
@@ -78,6 +80,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (loginUser != null) {
             UserContext.set(loginUser);
         }
+
+        // 接口级权限校验（@RequiresPerm）：角色授权矩阵决定能不能做这个动作
+        checkPermission(handlerMethod, loginUser, request);
 
         RequiresRole requiresRole = resolveRequiresRole(handlerMethod);
         if (requiresRole == null) {
@@ -130,5 +135,39 @@ public class AuthInterceptor implements HandlerInterceptor {
             return annotation;
         }
         return handlerMethod.getBeanType().getAnnotation(RequiresRole.class);
+    }
+
+    /**
+     * 接口级权限校验：{@link RequiresPerm} 声明了权限码时，要求当前角色在
+     * {@code sys_role_permission} 中被授予其中任意一个（ADMIN 的 admin:all 通配）。
+     *
+     * <p>为什么放在角色校验之前：权限码比角色更细。超管在管理端把某个角色的
+     * {@code dish:write} 关掉，商户下一次请求就该被挡住，而不需要重启服务
+     * （权限集合缓存在 Redis，管理端保存时会主动失效）。
+     *
+     * <p>没有注解的接口不受影响，仍然只要求登录。
+     */
+    private void checkPermission(HandlerMethod handlerMethod, LoginUser loginUser,
+                                 HttpServletRequest request) {
+        RequiresPerm requiresPerm = resolveRequiresPerm(handlerMethod);
+        if (requiresPerm == null) {
+            return;
+        }
+        if (loginUser == null) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        if (!permissionService.hasPerm(loginUser.getRole(), requiresPerm.value())) {
+            log.warn("权限不足被拒绝: uri={}, role={}, need={}",
+                    request.getRequestURI(), loginUser.getRole(), Arrays.toString(requiresPerm.value()));
+            throw new BusinessException(ResultCode.FORBIDDEN);
+        }
+    }
+
+    private RequiresPerm resolveRequiresPerm(HandlerMethod handlerMethod) {
+        RequiresPerm annotation = handlerMethod.getMethodAnnotation(RequiresPerm.class);
+        if (annotation != null) {
+            return annotation;
+        }
+        return handlerMethod.getBeanType().getAnnotation(RequiresPerm.class);
     }
 }

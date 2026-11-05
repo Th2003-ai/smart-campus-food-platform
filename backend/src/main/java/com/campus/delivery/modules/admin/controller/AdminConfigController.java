@@ -2,6 +2,7 @@ package com.campus.delivery.modules.admin.controller;
 
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.common.exception.BusinessException;
+import com.campus.delivery.modules.cache.service.DictCacheService;
 import com.campus.delivery.security.RequiresRole;
 import com.campus.delivery.security.RoleEnum;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +38,8 @@ import java.util.Map;
 public class AdminConfigController {
 
     private final JdbcTemplate jdbcTemplate;
+    /** 配置属于静态字典：写后刷新，避免等到 TTL 才生效 */
+    private final DictCacheService dictCacheService;
 
     @Operation(summary = "配置列表")
     @GetMapping
@@ -75,6 +78,8 @@ public class AdminConfigController {
                     "INSERT INTO sys_config (id, config_key, config_value, remark) VALUES (?, ?, ?, ?)",
                     newId(), key.trim(), value, remark);
         }
+        // 写时刷新：配置属于静态字典，改完立刻重载，不等 TTL（PPT 第 21 页）
+        dictCacheService.refresh("配置变更后刷新");
         return Result.ok();
     }
 

@@ -44,6 +44,8 @@ temp/
 uploads/
 *.tmp
 *.bak
+# Redis 快照：如果 redis-server 是在项目目录下启动的，dump.rdb 会落在这里
+dump.rdb
 
 # ---------- 操作系统 ----------
 .DS_Store

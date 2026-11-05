@@ -242,8 +242,30 @@ const routes: RouteRecordRaw[] = [
         name: 'AdminMenuTree',
         component: () => import('@/views/admin/MenuTree.vue'),
         meta: { title: '菜单权限树' }
+      },
+      {
+        path: 'permissions',
+        name: 'AdminPermissions',
+        component: () => import('@/views/admin/Permissions.vue'),
+        meta: { title: '角色权限' }
       }
     ]
+  },
+
+  // 文件上传下载演示页（独立入口，无需登录：/file-demo）
+  {
+    path: '/file-demo',
+    name: 'FileDemo',
+    component: () => import('@/views/file/FileDemo.vue'),
+    meta: { title: '文件上传下载演示' }
+  },
+
+  // 缓存演示页（PPT 新增页对照：三兄弟 / 热 key / 静态字典），仅管理员
+  {
+    path: '/cache-demo',
+    name: 'CacheDemo',
+    component: () => import('@/views/cache/CacheDemo.vue'),
+    meta: { title: '缓存演示', role: 'ADMIN' }
   },
 
   { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('@/views/NotFound.vue') }

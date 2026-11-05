@@ -16,7 +16,7 @@
             <el-button :disabled="loading" @click="load">刷新</el-button>
           </div>
 
-          <el-button type="primary" @click="onCreate">新增菜品</el-button>
+          <el-button v-if="canWrite" type="primary" @click="onCreate">新增菜品</el-button>
         </div>
       </template>
 
@@ -57,7 +57,8 @@
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="onEdit(row)">编辑</el-button>
+            <el-button v-if="canWrite" link type="primary" @click="onEdit(row)">编辑</el-button>
+            <span v-else class="readonly-tip">只读</span>
           </template>
         </el-table-column>
 
@@ -133,7 +134,7 @@
  *   PUT  /merchant/dishes/{id}/stock   调整库存（query 参数 stock，改成 0 自动下架）
  *   GET  /merchant/dish-categories     分类列表（必须传 shopId）
  */
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 
 import {
@@ -146,6 +147,11 @@ import {
   type DishCategory
 } from '@/api/dish'
 import { getMyShop } from '@/api/shop'
+import { useUserStore } from '@/store/user'
+
+const userStore = useUserStore()
+/** 只有被授予 dish:write 才能增删改菜品（管理员改完授权后按钮会跟着消失） */
+const canWrite = computed(() => userStore.hasPerm('dish:write'))
 
 const categories = ref<DishCategory[]>([])
 const dishes = ref<Dish[]>([])
@@ -322,5 +328,9 @@ onMounted(init)
 .hint {
   margin: 12px 0 0;
   line-height: 1.6;
+}
+.readonly-tip {
+  font-size: 12px;
+  color: #c0c4cc;
 }
 </style>

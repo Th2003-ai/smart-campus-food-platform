@@ -38,7 +38,9 @@ spring:
       port: ${REDIS_PORT:6379}
       database: ${REDIS_DATABASE:0}
       password: ${REDIS_PASSWORD:}
-      timeout: 3000ms
+      # 命令超时：Redis 故障时要快速失败，否则一次请求要等 3 秒（配合 CacheSwitch 熔断）
+      timeout: 1500ms
+      connect-timeout: 1500ms
       lettuce:
         pool:
           max-active: 16

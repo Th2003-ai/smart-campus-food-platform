@@ -58,6 +58,37 @@
     <el-card shadow="never">
       <template #header>
         <div class="header">
+          <span>近 7 天经营趋势</span>
+          <el-button size="small" text type="primary" @click="loadAll">刷新</el-button>
+        </div>
+      </template>
+      <div class="trend">
+        <div v-for="d in trend" :key="d.date" class="trend-col">
+          <div class="trend-val">{{ num(d.sales) > 0 ? '¥' + money(d.sales) : '—' }}</div>
+          <div class="trend-bar-wrap">
+            <div class="trend-bar" :style="{ height: barHeight(d.sales) }" />
+          </div>
+          <div class="trend-label">{{ d.date.slice(5) }}</div>
+          <div class="trend-orders">{{ num(d.orders) }} 单</div>
+        </div>
+      </div>
+
+      <el-divider content-position="left">
+        店内热销 Top{{ hot.length || 5 }}（近 30 天成交件数）
+      </el-divider>
+      <el-empty v-if="!hot.length" description="还没有成交数据" :image-size="60" />
+      <div v-else class="hot-list">
+        <div v-for="item in hot" :key="item.dishId" class="hot-item">
+          <span class="hot-rank">{{ item.rank }}</span>
+          <span class="hot-name">{{ item.dishName }}</span>
+          <span class="hot-qty">{{ item.qty }} 件</span>
+        </div>
+      </div>
+    </el-card>
+
+    <el-card shadow="never">
+      <template #header>
+        <div class="header">
           <span>菜品销售概览</span>
           <el-button size="small" text type="primary" @click="router.push('/merchant/ai-report')">
             查看 AI 经营简报
@@ -97,12 +128,12 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
-import { listMyDishes, type Dish } from '@/api/dish'
-import { getShopStats } from '@/api/order'
+import { getShopTopDishes, listMyDishes, type Dish } from '@/api/dish'
+import { getShopStats, getShopTrend } from '@/api/order'
 import { getMyShop, updateBusinessStatus, type Shop } from '@/api/shop'
 import { money } from '@/utils/dict'
 import { dishCover } from '@/utils/image'
@@ -113,6 +144,16 @@ const loading = ref(false)
 const shop = ref<Shop | null>(null)
 const dishes = ref<Dish[]>([])
 const opening = ref(false)
+
+/** 近 7 天趋势（无单日后端已补 0） */
+const trend = ref<Array<{ date: string; orders: number; sales: number }>>([])
+/** 店内热销榜（后端 Redis ZSet 缓存 5 分钟） */
+const hot = ref<Array<{ rank: number; dishId: string; dishName: string; qty: number }>>([])
+
+const maxSales = computed(() => Math.max(...trend.value.map((d) => num(d.sales)), 1))
+function barHeight(sales: unknown): string {
+  return `${Math.max(4, (num(sales) / maxSales.value) * 100)}%`
+}
 
 const s = reactive({
   todayOrders: 0,
@@ -147,6 +188,9 @@ async function loadAll() {
     s.deliveringCount = num(stats.deliveringCount)
     s.totalSales = num(stats.totalSales)
     dishes.value = dishList
+    // 两个新增指标单独加载：旧后端没有这两个接口时，主看板照常显示
+    trend.value = await getShopTrend(7).catch(() => [])
+    hot.value = await getShopTopDishes(30, 5).catch(() => [])
   } catch {
     // 拦截器提示（例如商户未通过审核）
   } finally {
@@ -189,6 +233,79 @@ onMounted(loadAll)
 }
 .mt {
   margin-top: 20px;
+}
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 170px;
+  padding: 0 4px;
+}
+.trend-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+.trend-val {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 4px;
+}
+.trend-bar-wrap {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+}
+.trend-bar {
+  width: 100%;
+  min-height: 4px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, #409eff, #a0cfff);
+}
+.trend-label {
+  font-size: 12px;
+  color: #606266;
+  margin-top: 6px;
+}
+.trend-orders {
+  font-size: 12px;
+  color: #909399;
+}
+.hot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hot-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.hot-rank {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #409eff;
+  color: #fff;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.hot-name {
+  flex: 1;
+}
+.hot-qty {
+  color: #e6a23c;
+  font-weight: 600;
 }
 .dish-cell {
   display: flex;

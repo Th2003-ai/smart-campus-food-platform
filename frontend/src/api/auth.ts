@@ -13,6 +13,8 @@ export interface LoginResult {
   role: string
   nickname?: string
   avatar?: string
+  /** 当前角色被授予的权限码，用于按权限显示/隐藏按钮 */
+  perms?: string[]
 }
 
 /**

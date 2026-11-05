@@ -21,6 +21,8 @@ const SUCCESS_CODE = 200
 const UNAUTHORIZED_CODE = 401
 export const TOKEN_KEY = 'campus_token'
 export const ROLE_KEY = 'campus_role'
+/** 当前角色的权限码（登录时由后端下发，前端据此显示/隐藏按钮） */
+export const PERMS_KEY = 'campus_perms'
 
 const service: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -62,6 +64,7 @@ service.interceptors.response.use(
 function handleUnauthorized() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(ROLE_KEY)
+  localStorage.removeItem(PERMS_KEY)
   ElMessage.warning('登录已过期，请重新登录')
   const redirect = encodeURIComponent(window.location.hash.replace(/^#/, '') || '/')
   window.location.hash = `/login?redirect=${redirect}`

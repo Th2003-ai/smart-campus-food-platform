@@ -1,5 +1,7 @@
 package com.campus.delivery.modules.order.controller;
 
+import com.campus.delivery.security.RequiresPerm;
+
 import com.campus.delivery.common.api.PageResult;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.order.dto.OrderVO;
@@ -43,19 +45,29 @@ public class MerchantOrderController {
         return Result.ok(orderService.shopOverview());
     }
 
+    @Operation(summary = "本店近 N 天趋势", description = "按天返回已完成订单数与营业额，无单日补 0")
+    @GetMapping("/stats/trend")
+    public Result<java.util.List<java.util.Map<String, Object>>> trend(
+            @RequestParam(defaultValue = "7") int days) {
+        return Result.ok(orderService.shopTrend(days));
+    }
+
     @Operation(summary = "接单", description = "订单状态变更为备餐中")
+    @RequiresPerm("order:transit")
     @PostMapping("/{id}/accept")
     public Result<Order> accept(@PathVariable String id) {
         return Result.ok(orderService.merchantTransit(id, 1, null));
     }
 
     @Operation(summary = "已出餐", description = "生成取餐码并进入骑手抢单池")
+    @RequiresPerm("order:transit")
     @PostMapping("/{id}/ready")
     public Result<Order> ready(@PathVariable String id) {
         return Result.ok(orderService.merchantTransit(id, 2, null));
     }
 
     @Operation(summary = "拒单", description = "订单取消、回补库存并退款")
+    @RequiresPerm("order:transit")
     @PostMapping("/{id}/reject")
     public Result<Order> reject(@PathVariable String id, @RequestParam String reason) {
         return Result.ok(orderService.merchantTransit(id, 5, reason));

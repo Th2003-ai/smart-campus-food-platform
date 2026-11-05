@@ -63,6 +63,7 @@
           </div>
           <div class="card-foot">
             <el-button
+              v-if="canGrab"
               type="primary"
               size="small"
               :loading="actingId === o.id"
@@ -71,6 +72,7 @@
             >
               抢单
             </el-button>
+            <span v-else class="readonly-tip">当前主体未授予抢单权限</span>
           </div>
         </div>
       </div>
@@ -84,7 +86,12 @@ import { ElMessage } from 'element-plus'
 
 import type { Order } from '@/api/order'
 import { getRiderProfile, grabOrder, listGrabHall, updateWorkStatus } from '@/api/rider'
+import { useUserStore } from '@/store/user'
 import { money } from '@/utils/dict'
+
+const userStore = useUserStore()
+/** 只有被授予 rider:grab 才能抢单（管理端收回后按钮直接消失） */
+const canGrab = ref(userStore.hasPerm('rider:grab'))
 
 const orders = ref<Order[]>([])
 const loading = ref(false)
@@ -233,5 +240,9 @@ onUnmounted(() => {
 .text-muted {
   color: #909399;
   font-size: 12px;
+}
+.readonly-tip {
+  font-size: 12px;
+  color: #c0c4cc;
 }
 </style>

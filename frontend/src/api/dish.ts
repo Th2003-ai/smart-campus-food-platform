@@ -68,9 +68,22 @@ export function listDishCategories(shopId: string) {
 }
 
 /**
- * 注意：后端 MerchantDishController 目前【没有】删除菜品的接口，调用会 404。
- * 保留它只是备用；要真做删除，得先让后端加接口（dish 表有 deleted 字段，可做逻辑删除）。
+ * 删除菜品（逻辑删除，后端 MerchantDishController#remove 已提供）。
+ * 历史订单保存的是明细快照，删菜不影响已成交订单的展示。
  */
 export function removeDish(id: string) {
   return del<void>(`/merchant/dishes/${id}`)
+}
+
+/** 商户端：店内热销榜（近 N 天成交件数 TopN，后端 Redis ZSet 缓存 5 分钟） */
+export function getShopTopDishes(days = 30, limit = 5) {
+  return get<Array<{ rank: number; dishId: string; dishName: string; qty: number }>>(
+    '/merchant/dishes/top',
+    { days, limit }
+  )
+}
+
+/** 商户端：批量上下架（status: 1 上架 / 0 下架） */
+export function batchUpdateDishStatus(ids: string[], status: number) {
+  return put<number>('/merchant/dishes/batch-status', { ids, status })
 }

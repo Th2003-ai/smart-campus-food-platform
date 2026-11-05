@@ -31,8 +31,27 @@ public final class RedisKeys {
     /** 菜品详情缓存：cache:dish:detail:{dishId} */
     public static final String DISH_DETAIL = "cache:dish:detail:";
 
+    /**
+     * 菜品空值缓存（防穿透）：cache:dish:null:{dishId}
+     *
+     * <p>查不到的 ID 也缓存一个短 TTL 标记（60 秒），
+     * 同一个假 ID 被反复请求时，第二次开始不再打库。
+     */
+    public static final String DISH_NULL = "cache:dish:null:";
+
+    /** 字典/配置缓存（PPT 第 21 页）：cache:dict:{name} */
+    public static final String DICT_CACHE = "cache:dict:";
+
     /** 店铺详情缓存：cache:shop:detail:{shopId} */
     public static final String SHOP_DETAIL = "cache:shop:detail:";
+
+    /**
+     * 店内热销榜：cache:merchant:hot:{shopId}（有序集合，score 为最近 30 天销量）
+     *
+     * <p>商户端经营看板用。粒度是「一家店」，与平台级 {@link #HOT_DISH} 不同：
+     * 平台榜看重全站热销，店内榜只看自己卖得最好的几道菜。
+     */
+    public static final String MERCHANT_HOT_DISH = "cache:merchant:hot:";
 
     /** 骑手抢单池（有序集合，score 为出餐时间，保证先出餐先被看到） */
     public static final String GRAB_POOL = "delivery:grab:pool";

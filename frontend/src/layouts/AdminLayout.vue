@@ -11,6 +11,7 @@
         <el-menu-item index="/admin/tickets">客服工单</el-menu-item>
         <el-menu-item index="/admin/config">系统配置</el-menu-item>
         <el-menu-item index="/admin/menu">菜单权限树</el-menu-item>
+        <el-menu-item index="/admin/permissions">角色权限</el-menu-item>
       </el-menu>
     </el-aside>
 
