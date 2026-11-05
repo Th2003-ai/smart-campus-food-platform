@@ -30,6 +30,8 @@ export interface Review {
   merchantReply?: string
   replyTime?: string
   createTime?: string
+  /** 评价图片地址（后端按 review_image 批量拼装） */
+  images?: string[]
 }
 
 /**
