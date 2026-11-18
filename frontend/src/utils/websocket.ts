@@ -17,6 +17,8 @@ export type MessageHandler = (data: any) => void
 
 const RECONNECT_DELAY = 3000
 const MAX_RECONNECT = 5
+/** 心跳间隔：后端骑手在线标记 TTL 为 60 秒，这里 25 秒发一次 ping 续期，确保不会被判离线 */
+const HEARTBEAT_INTERVAL = 25000
 
 /**
  * 计算 WebSocket 端点。
@@ -41,6 +43,7 @@ export class OrderSocket {
   private handlers = new Map<string, MessageHandler[]>()
   private reconnectCount = 0
   private manualClosed = false
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
   connect() {
     const token = localStorage.getItem(TOKEN_KEY)
@@ -51,6 +54,7 @@ export class OrderSocket {
 
     this.ws.onopen = () => {
       this.reconnectCount = 0
+      this.startHeartbeat()
     }
 
     this.ws.onmessage = (event) => {
@@ -63,6 +67,7 @@ export class OrderSocket {
     }
 
     this.ws.onclose = () => {
+      this.stopHeartbeat()
       if (!this.manualClosed && this.reconnectCount < MAX_RECONNECT) {
         this.reconnectCount += 1
         setTimeout(() => this.connect(), RECONNECT_DELAY)
@@ -89,7 +94,25 @@ export class OrderSocket {
 
   close() {
     this.manualClosed = true
+    this.stopHeartbeat()
     this.ws?.close()
     this.ws = null
+  }
+
+  /** 连接成功后定时发送心跳，续期后端 Redis 在线标记（TTL 60s） */
+  private startHeartbeat() {
+    this.stopHeartbeat()
+    this.heartbeatTimer = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send('ping')
+      }
+    }, HEARTBEAT_INTERVAL)
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+    }
   }
 }
