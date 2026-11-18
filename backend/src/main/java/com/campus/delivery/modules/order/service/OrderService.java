@@ -12,6 +12,8 @@ import com.campus.delivery.modules.cart.entity.CartItem;
 import com.campus.delivery.modules.cart.service.CartService;
 import com.campus.delivery.modules.dish.entity.Dish;
 import com.campus.delivery.modules.dish.service.DishService;
+import com.campus.delivery.modules.mq.OrderMessage;
+import com.campus.delivery.modules.mq.OrderMessageProducer;
 import com.campus.delivery.modules.order.dto.CreateOrderRequest;
 import com.campus.delivery.modules.order.dto.OrderVO;
 import com.campus.delivery.modules.order.entity.Order;
@@ -82,6 +84,8 @@ public class OrderService {
     private final OrderTimeoutQueue orderTimeoutQueue;
     /** 模拟支付：扣余额 / 退款 / 写 payment_record */
     private final com.campus.delivery.modules.payment.service.PaymentService paymentService;
+    /** 消息队列生产者：下单成功后异步投递订单消息 */
+    private final OrderMessageProducer orderMessageProducer;
 
     // ==================================================================
     // 学生端
@@ -152,6 +156,17 @@ public class OrderService {
                 stringRedisTemplate.opsForValue()
                         .set(idemKey, vo.getOrder().getId(), Duration.ofMinutes(5));
             }
+
+            // 订单创建成功、事务提交后，投递消息到 RabbitMQ，由消费者异步处理后续业务
+            Order order = vo.getOrder();
+            OrderMessage message = new OrderMessage();
+            message.setOrderId(order.getId());
+            message.setOrderNo(order.getOrderNo());
+            message.setUserId(order.getUserId());
+            message.setTotalAmount(order.getTotalAmount());
+            message.setCreateTime(LocalDateTime.now());
+            orderMessageProducer.sendOrderCreate(message);
+
             return vo;
         } catch (DuplicateKeyException e) {
             log.warn("重复提交被数据库唯一索引拦截: userId={}, requestId={}", userId, requestId);

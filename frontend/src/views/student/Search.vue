@@ -5,9 +5,10 @@
       <div class="search-row">
         <el-input
           v-model="keyword"
-          placeholder="输入菜品或店铺名称，回车搜索"
+          placeholder="输入菜品或店铺名称，停顿自动搜索，回车立即搜索"
           clearable
-          @keyup.enter="onSearch"
+          @input="onInput"
+          @keyup.enter="onEnter"
         >
           <template #append>
             <el-button @click="onSearch">搜索</el-button>
@@ -94,12 +95,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { semanticSearch } from '@/api/ai'
 import { searchDishes, type Dish } from '@/api/dish'
 import { listShops, type Shop } from '@/api/shop'
+import { debounce } from '@/utils/debounce'
 import { money, splitCsv } from '@/utils/dict'
 import { dishCover } from '@/utils/image'
 
@@ -136,6 +138,26 @@ async function onSearch() {
     loading.value = false
   }
 }
+
+/**
+ * 输入实时防抖：连续输入时不断重新计时，停顿 400ms 后才真正发一次搜索请求；
+ * 哪怕用户不停敲键盘，也不会每个字符都打一次后端。
+ */
+const debouncedSearch = debounce(() => {
+  onSearch()
+}, 400)
+
+function onInput() {
+  if (keyword.value.trim()) debouncedSearch()
+}
+
+/** 回车：取消尚未执行的防抖，立即搜索 */
+function onEnter() {
+  debouncedSearch.cancel()
+  onSearch()
+}
+
+onBeforeUnmount(() => debouncedSearch.cancel())
 
 /** AI 语义搜索：返回 reply + dishes，fallback=true 表示已降级 */
 async function onSemantic() {
