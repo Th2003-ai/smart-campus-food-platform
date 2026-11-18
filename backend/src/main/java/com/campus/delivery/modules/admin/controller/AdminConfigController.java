@@ -4,7 +4,6 @@ import com.campus.delivery.common.api.Result;
 import com.campus.delivery.common.exception.BusinessException;
 import com.campus.delivery.modules.cache.service.DictCacheService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +33,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/config")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.ADMIN)
+@RequiresRole("ADMIN")
 public class AdminConfigController {
 
     private final JdbcTemplate jdbcTemplate;

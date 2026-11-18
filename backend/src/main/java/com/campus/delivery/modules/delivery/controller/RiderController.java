@@ -9,7 +9,6 @@ import com.campus.delivery.modules.delivery.entity.Rider;
 import com.campus.delivery.modules.delivery.service.DeliveryService;
 import com.campus.delivery.modules.order.entity.Order;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,7 +32,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/rider")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.RIDER)
+@RequiresRole("RIDER")
 public class RiderController {
 
     private final DeliveryService deliveryService;

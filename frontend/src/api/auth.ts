@@ -11,6 +11,10 @@ export interface LoginResult {
   token: string
   userId: string
   role: string
+  /** 所属端（sys_role.portal）：决定进入哪套页面 */
+  portal?: string
+  /** 登录后首页（sys_role.home_path） */
+  homePath?: string
   nickname?: string
   avatar?: string
   /** 当前角色被授予的权限码，用于按权限显示/隐藏按钮 */
@@ -18,10 +22,12 @@ export interface LoginResult {
 }
 
 /**
- * 注册角色。
- * 管理员不开放注册（后端会拒绝），只能使用系统预置账号。
+ * 注册角色编码。
+ *
+ * <p>角色是数据（后端 sys_role 表），可注册角色由 {@code allow_register=1} 决定，
+ * 所以这里不再写死联合类型，改为任意角色编码字符串。
  */
-export type RegisterRole = 'STUDENT' | 'MERCHANT' | 'RIDER'
+export type RegisterRole = string
 
 /**
  * 注册入参（必须与后端 RegisterRequest 字段一一对应）

@@ -1,4 +1,4 @@
-import { get, post, put } from '@/utils/request'
+import { del, get, post, put } from '@/utils/request'
 
 /** 一条授权项 */
 export interface RolePermItem {
@@ -9,6 +9,8 @@ export interface RolePermItem {
 /** 权限矩阵：四个主体 × 权限码 */
 export interface PermMatrix {
   roles: string[]
+  /** 角色元信息（来自 sys_role 表，含中文名与是否内置） */
+  roleMeta?: Array<{ code: string; name: string; builtin: boolean; status: number }>
   scopes: string[]
   perms: string[]
   granted: Record<string, Record<string, string>>
@@ -74,4 +76,14 @@ export function updateUserStatus(id: string, status: number) {
 /** 重置密码 */
 export function resetUserPassword(id: string, password: string) {
   return put<void>(`/admin/perm/users/${id}/password`, { password })
+}
+
+/**
+ * 删除成员（逻辑删除）。
+ *
+ * <p>删除后该账号无法登录，其角色下的用户数减少，角色才能被删除。
+ * 后端会拒绝：删除自己、删除最后一个启用的管理员。
+ */
+export function deletePermUser(id: string) {
+  return del<void>(`/admin/perm/users/${id}`)
 }

@@ -7,7 +7,6 @@ import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.review.entity.Review;
 import com.campus.delivery.modules.review.service.ReviewService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +27,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/merchant/reviews")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.MERCHANT)
+@RequiresRole("MERCHANT")
 public class MerchantReviewController {
 
     private final ReviewService reviewService;

@@ -9,7 +9,6 @@ import com.campus.delivery.modules.review.dto.ReviewSubmitDTO;
 import com.campus.delivery.modules.review.entity.Review;
 import com.campus.delivery.modules.review.service.ReviewService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,7 +35,7 @@ public class ReviewController {
     @RateLimit(name = "review:submit", limit = 5, seconds = 60, message = "评价提交过于频繁")
     @RequiresPerm("review:write")
     @PostMapping
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<Review> submit(@RequestBody ReviewSubmitDTO dto) {
         return Result.ok(reviewService.submit(UserContext.getUserId(), dto));
     }

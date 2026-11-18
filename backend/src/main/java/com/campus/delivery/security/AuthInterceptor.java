@@ -96,8 +96,11 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (loginUser == null) {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
+        // 以「端」为准：新角色挂靠到某个端后即可通过该端的角色校验
+        String portal = loginUser.getPortal();
+        String currentPortal = (portal != null && !portal.isBlank()) ? portal : loginUser.getRole();
         boolean allowed = Arrays.stream(requiresRole.value())
-                .anyMatch(role -> role.getCode().equalsIgnoreCase(loginUser.getRole()));
+                .anyMatch(code -> code.equalsIgnoreCase(currentPortal));
         if (!allowed) {
             log.warn("越权访问被拒绝: uri={}, role={}, need={}",
                     request.getRequestURI(), loginUser.getRole(), Arrays.toString(requiresRole.value()));

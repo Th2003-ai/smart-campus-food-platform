@@ -7,7 +7,6 @@ import com.campus.delivery.modules.user.dto.UserProfileVO;
 import com.campus.delivery.modules.user.entity.DietProfile;
 import com.campus.delivery.modules.user.entity.UserAddress;
 import com.campus.delivery.modules.user.service.UserService;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.security.RequiresRole;
 import com.campus.delivery.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,35 +45,35 @@ public class UserController {
 
     @Operation(summary = "查询饮食档案")
     @GetMapping("/diet-profile")
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<DietProfile> dietProfile() {
         return Result.ok(userService.getOrCreateDietProfile(UserContext.getUserId()));
     }
 
     @Operation(summary = "维护饮食档案", description = "设置忌口、过敏原、饮食目标、口味偏好")
     @PutMapping("/diet-profile")
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<DietProfile> updateDietProfile(@RequestBody DietProfileDTO dto) {
         return Result.ok(userService.updateDietProfile(UserContext.getUserId(), dto));
     }
 
     @Operation(summary = "收货地址列表")
     @GetMapping("/address")
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<List<UserAddress>> addressList() {
         return Result.ok(userService.listAddress(UserContext.getUserId()));
     }
 
     @Operation(summary = "新增或修改收货地址")
     @PostMapping("/address")
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<UserAddress> saveAddress(@Valid @RequestBody AddressDTO dto) {
         return Result.ok(userService.saveAddress(UserContext.getUserId(), dto));
     }
 
     @Operation(summary = "删除收货地址")
     @DeleteMapping("/address/{id}")
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<Void> deleteAddress(@PathVariable String id) {
         userService.deleteAddress(UserContext.getUserId(), id);
         return Result.ok();

@@ -62,12 +62,13 @@
           </template>
         </el-table-column>
         <el-table-column prop="lastLoginTime" label="最近登录" min-width="170" />
-        <el-table-column label="操作" width="190" align="center">
+        <el-table-column label="操作" width="260" align="center">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="toggleStatus(row)">
               {{ row.status === 0 ? '启用' : '停用' }}
             </el-button>
             <el-button link type="warning" size="small" @click="openReset(row)">重置密码</el-button>
+            <el-button link type="danger" size="small" @click="onDeleteUser(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -127,6 +128,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createPermUser,
+  deletePermUser,
   permMatrix,
   permUsers,
   resetUserPassword,
@@ -157,12 +159,21 @@ const PERM_DESC: Record<string, string> = {
   'admin:all': '管理端全部权限'
 }
 
+/**
+ * 角色中文名的兜底表。
+ *
+ * <p>角色已经数据化（sys_role），真实名称从 matrix.roleMeta 来；
+ * 这里只在内置四端角色上做兜底，新增角色不需要改这里。
+ */
 const ROLE_TEXT: Record<string, string> = {
   STUDENT: '学生',
   MERCHANT: '商户',
   RIDER: '骑手',
   ADMIN: '管理员'
 }
+
+/** 后端下发的角色名称映射（code -> name） */
+const roleNameMap = ref<Record<string, string>>({})
 
 interface PermRow {
   permission: string
@@ -197,7 +208,8 @@ const resetTarget = ref<SysUserRow | null>(null)
 const resetPassword = ref('')
 
 function roleText(role: string) {
-  return ROLE_TEXT[role] ?? role
+  // 优先用 sys_role 里的名称（新增角色自动生效），再回退到内置兜底表
+  return roleNameMap.value[role] ?? ROLE_TEXT[role] ?? role
 }
 
 /** 用矩阵数据重建当前角色的可编辑行 */
@@ -218,7 +230,13 @@ async function loadMatrix() {
     const data = await permMatrix()
     matrix.value = data
     roles.value = data.roles
+    roleNameMap.value = Object.fromEntries(
+      (data.roleMeta ?? []).map((item) => [item.code, item.name])
+    )
     scopes.value = data.scopes
+    if (!roles.value.includes(currentRole.value)) {
+      currentRole.value = roles.value[0] ?? 'STUDENT'
+    }
     loadRoleRows()
   } finally {
     loading.value = false
@@ -259,6 +277,31 @@ async function toggleStatus(row: SysUserRow) {
   await updateUserStatus(row.id, next)
   ElMessage.success(`${row.username} 已${next === 1 ? '启用' : '停用'}`)
   await loadUsers()
+}
+
+/**
+ * 删除成员（逻辑删除）。
+ *
+ * <p>删除后该角色下的用户数会减少，角色才能被删除；
+ * 后端会拒绝「删除自己」和「删除最后一个启用的管理员」。
+ */
+async function onDeleteUser(row: SysUserRow) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除成员「${row.username}（${roleText(row.role)}）」？删除后该账号无法登录。`,
+      '删除成员',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await deletePermUser(row.id)
+    ElMessage.success(`已删除 ${row.username}`)
+    await loadUsers()
+  } catch {
+    // 拦截器已提示（不能删自己 / 最后一个管理员）
+  }
 }
 
 function openCreate() {

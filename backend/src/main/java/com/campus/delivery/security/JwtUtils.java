@@ -23,6 +23,7 @@ public class JwtUtils {
 
     private static final String CLAIM_USERNAME = "username";
     private static final String CLAIM_ROLE = "role";
+    private static final String CLAIM_PORTAL = "portal";
     private static final String CLAIM_NICKNAME = "nickname";
 
     @Value("${campus.jwt.secret}")
@@ -43,6 +44,7 @@ public class JwtUtils {
                 .subject(user.getUserId())
                 .claim(CLAIM_USERNAME, user.getUsername())
                 .claim(CLAIM_ROLE, user.getRole())
+                .claim(CLAIM_PORTAL, user.getPortal())
                 .claim(CLAIM_NICKNAME, user.getNickname())
                 .issuedAt(now)
                 .expiration(expiration)
@@ -62,6 +64,7 @@ public class JwtUtils {
                     claims.getSubject(),
                     claims.get(CLAIM_USERNAME, String.class),
                     claims.get(CLAIM_ROLE, String.class),
+                    claims.get(CLAIM_PORTAL, String.class),
                     claims.get(CLAIM_NICKNAME, String.class));
         } catch (Exception e) {
             log.debug("Token 解析失败: {}", e.getMessage());

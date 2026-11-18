@@ -244,12 +244,26 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '菜单权限树' }
       },
       {
+        path: 'roles',
+        name: 'AdminRoles',
+        component: () => import('@/views/admin/Roles.vue'),
+        meta: { title: '角色管理' }
+      },
+      {
         path: 'permissions',
         name: 'AdminPermissions',
         component: () => import('@/views/admin/Permissions.vue'),
         meta: { title: '角色权限' }
       }
     ]
+  },
+
+  // 数据驱动的新角色没有专属工作台时的落地页
+  {
+    path: '/no-workspace',
+    name: 'NoWorkspace',
+    component: () => import('@/views/NoWorkspace.vue'),
+    meta: { title: '暂无工作台' }
   },
 
   // 文件上传下载演示页（独立入口，无需登录：/file-demo）
@@ -289,9 +303,9 @@ router.beforeEach((to) => {
   if (!userStore.isLogin) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
-  if (requiredRole !== userStore.role) {
-    // 角色不匹配：跳回自己角色的首页，避免越权访问
-    return ROLE_HOME[userStore.role] || '/login'
+  if (requiredRole !== userStore.currentPortal) {
+    // 端不匹配：跳回自己端首页，避免越权访问；未配置端的动态角色去提示页
+    return userStore.home || '/no-workspace'
   }
   return true
 })

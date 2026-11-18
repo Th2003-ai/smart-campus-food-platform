@@ -4,7 +4,6 @@ import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.cart.dto.AddCartRequest;
 import com.campus.delivery.modules.cart.dto.CartItemVO;
 import com.campus.delivery.modules.cart.service.CartService;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.security.RequiresRole;
 import com.campus.delivery.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,7 +28,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/cart")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.STUDENT)
+@RequiresRole("STUDENT")
 public class CartController {
 
     private final CartService cartService;

@@ -5,12 +5,13 @@ import com.campus.delivery.common.api.ResultCode;
 import com.campus.delivery.common.constant.RedisKeys;
 import com.campus.delivery.common.exception.BusinessException;
 import com.campus.delivery.modules.admin.dto.RolePermItem;
+import com.campus.delivery.modules.admin.entity.SysRole;
 import com.campus.delivery.modules.admin.entity.SysRolePermission;
 import com.campus.delivery.modules.admin.mapper.SysRolePermissionMapper;
 import com.campus.delivery.modules.user.entity.SysUser;
 import com.campus.delivery.modules.user.mapper.SysUserMapper;
+import com.campus.delivery.security.UserContext;
 import com.campus.delivery.common.util.PasswordGenerator;
-import com.campus.delivery.security.RoleEnum;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -45,14 +46,14 @@ import java.util.TreeSet;
 @RequiredArgsConstructor
 public class PermissionService {
 
-    /** 四个主体（顺序即前端展示顺序） */
-    private static final List<String> ROLES = List.of("STUDENT", "MERCHANT", "RIDER", "ADMIN");
-
     /** 数据范围枚举值 */
     private static final List<String> SCOPES = List.of("ALL", "SHOP", "SELF");
 
-    /** 管理端「admin:all」视为通配权限 */
+    /** 管理员通配码，拥有它等于拥有一切权限（与前端 PERM_WILDCARD 一致） */
     public static final String WILDCARD = "admin:all";
+
+    /** 内置管理员角色编码（用于「最后一个管理员」保护） */
+    private static final String CODES_ADMIN = "ADMIN";
 
     /** 新增成员未指定密码时的默认密码 */
     public static final String DEFAULT_PASSWORD = "Campus@2026";
@@ -62,6 +63,8 @@ public class PermissionService {
     private final SysRolePermissionMapper rolePermissionMapper;
     private final SysUserMapper sysUserMapper;
     private final RedisTemplate<String, Object> redisTemplate;
+    /** 角色字典：角色来自 sys_role 表，不再写死 */
+    private final RoleService roleService;
 
     // ============================ 权限矩阵 ============================
 
@@ -72,6 +75,20 @@ public class PermissionService {
      * {@code { roles:[...], scopes:[...], perms:[权限码...], granted:{角色:{权限码:数据范围}} }}
      */
     public Map<String, Object> matrix() {
+        // 角色来自 sys_role（数据驱动）：新增角色不需要改这里
+        List<SysRole> roleRows = roleService.listAll();
+        List<String> roleCodes = new ArrayList<>();
+        List<Map<String, Object>> roleMeta = new ArrayList<>();
+        for (SysRole role : roleRows) {
+            roleCodes.add(role.getCode());
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("code", role.getCode());
+            meta.put("name", role.getName());
+            meta.put("builtin", Integer.valueOf(1).equals(role.getBuiltin()));
+            meta.put("status", role.getStatus());
+            roleMeta.add(meta);
+        }
+
         List<SysRolePermission> rows = rolePermissionMapper.selectList(
                 new LambdaQueryWrapper<SysRolePermission>()
                         .orderByAsc(SysRolePermission::getRole)
@@ -81,7 +98,7 @@ public class PermissionService {
         TreeSet<String> perms = new TreeSet<>();
         // 角色 → (权限码 → 数据范围)
         Map<String, Map<String, String>> granted = new LinkedHashMap<>();
-        for (String role : ROLES) {
+        for (String role : roleCodes) {
             granted.put(role, new LinkedHashMap<>());
         }
         for (SysRolePermission row : rows) {
@@ -91,7 +108,8 @@ public class PermissionService {
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("roles", ROLES);
+        result.put("roles", roleCodes);
+        result.put("roleMeta", roleMeta);
         result.put("scopes", SCOPES);
         result.put("perms", new ArrayList<>(perms));
         result.put("granted", granted);
@@ -136,15 +154,21 @@ public class PermissionService {
             return Set.of();
         }
         String key = RedisKeys.ROLE_PERMISSION + role;
-        Object cached = redisTemplate.opsForValue().get(key);
-        if (cached instanceof Collection<?> collection && !collection.isEmpty()) {
-            Set<String> hit = new LinkedHashSet<>();
-            for (Object item : collection) {
-                if (item != null) {
-                    hit.add(String.valueOf(item));
+
+        // 缓存只是加速手段：Redis 故障时降级查库，不能把登录/鉴权一起拖垮
+        try {
+            Object cached = redisTemplate.opsForValue().get(key);
+            if (cached instanceof Collection<?> collection && !collection.isEmpty()) {
+                Set<String> hit = new LinkedHashSet<>();
+                for (Object item : collection) {
+                    if (item != null) {
+                        hit.add(String.valueOf(item));
+                    }
                 }
+                return hit;
             }
-            return hit;
+        } catch (Exception e) {
+            log.warn("读取角色权限缓存失败，降级查库: role={}, err={}", role, e.getMessage());
         }
 
         List<SysRolePermission> rows = rolePermissionMapper.selectList(
@@ -153,7 +177,11 @@ public class PermissionService {
         for (SysRolePermission row : rows) {
             perms.add(row.getPermission());
         }
-        redisTemplate.opsForValue().set(key, new ArrayList<>(perms), PERM_CACHE_TTL);
+        try {
+            redisTemplate.opsForValue().set(key, new ArrayList<>(perms), PERM_CACHE_TTL);
+        } catch (Exception e) {
+            log.debug("回填角色权限缓存失败（忽略）: role={}, err={}", role, e.getMessage());
+        }
         return perms;
     }
 
@@ -236,6 +264,33 @@ public class PermissionService {
         sysUserMapper.updateById(user);
     }
 
+    /**
+     * 删除成员（逻辑删除，deleted=1）。
+     *
+     * <p>两条保护：不能删除自己；不能删除最后一个启用的管理员。
+     * 删除后该账号不能再登录，其角色下的用户数随之减少，角色才能被删除。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteUser(String userId) {
+        SysUser user = requireUser(userId);
+        if (user.getId().equals(UserContext.getUserIdOrNull())) {
+            throw new BusinessException(ResultCode.PARAM_ERROR.getCode(), "不能删除当前登录的账号");
+        }
+        if (CODES_ADMIN.equalsIgnoreCase(user.getRole())) {
+            Long enabledAdmins = sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()
+                    .eq(SysUser::getRole, CODES_ADMIN)
+                    .eq(SysUser::getStatus, 1));
+            if (enabledAdmins == null || enabledAdmins <= 1) {
+                throw new BusinessException(ResultCode.PARAM_ERROR.getCode(),
+                        "系统至少要保留一个启用的管理员");
+            }
+        }
+        // SysUser.deleted 上有 @TableLogic，deleteById 实际是 UPDATE deleted = 1
+        sysUserMapper.deleteById(userId);
+        log.warn("删除成员（逻辑删除）: userId={}, username={}, role={}",
+                user.getId(), user.getUsername(), user.getRole());
+    }
+
     /** 重置成员密码 */
     public void resetPassword(String userId, String rawPassword) {
         if (!StringUtils.hasText(rawPassword) || rawPassword.length() < 6) {
@@ -254,21 +309,13 @@ public class PermissionService {
         return user;
     }
 
+    /** 规范化角色编码：必须是 sys_role 中存在的角色 */
     private String normalizeRole(String role) {
-        RoleEnum matched = RoleEnum.of(role);
-        if (matched == null) {
-            throw new BusinessException(ResultCode.PARAM_ERROR.getCode(), "未知角色：" + role);
-        }
-        return matched.getCode();
+        return roleService.require(role).getCode();
     }
 
+    /** 角色中文名，用于默认昵称 */
     private String role_label(String role) {
-        return switch (role) {
-            case "STUDENT" -> "学生";
-            case "MERCHANT" -> "商户";
-            case "RIDER" -> "骑手";
-            case "ADMIN" -> "管理员";
-            default -> role;
-        };
+        return roleService.displayName(role);
     }
 }

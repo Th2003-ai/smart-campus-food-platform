@@ -16,14 +16,6 @@
             show-password
           />
         </el-form-item>
-        <el-form-item label="角色" prop="role">
-          <el-radio-group v-model="form.role">
-            <el-radio-button value="STUDENT">学生</el-radio-button>
-            <el-radio-button value="MERCHANT">商户</el-radio-button>
-            <el-radio-button value="RIDER">骑手</el-radio-button>
-            <el-radio-button value="ADMIN">管理员</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" style="width: 100%" @click="onSubmit">登录</el-button>
         </el-form-item>
@@ -39,7 +31,7 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { type FormInstance, type FormRules } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
 import { ROLE_HOME, useUserStore } from '@/store/user'
@@ -50,7 +42,11 @@ const userStore = useUserStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 
-const form = reactive({ username: '', password: '', role: 'STUDENT' })
+/**
+ * 登录只填账号密码：角色由账号在 sys_role 里的绑定决定，前端不再让用户选。
+ * 这样新增角色不需要改登录页，也不会出现「选错入口」的问题。
+ */
+const form = reactive({ username: '', password: '' })
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
@@ -65,11 +61,10 @@ async function onSubmit() {
   loading.value = true
   try {
     const result = await userStore.login({ username: form.username, password: form.password })
-    if (result.role !== form.role) {
-      ElMessage.warning('所选角色与账号实际角色不一致，已按账号角色进入')
-    }
+    // 首页由角色配置（sys_role.home_path）决定，内置四端有默认值
+    const home = userStore.home || ROLE_HOME[result.role] || '/no-workspace'
     const redirect = route.query.redirect as string | undefined
-    router.push(redirect || ROLE_HOME[result.role] || '/login')
+    router.push(redirect || home)
   } finally {
     loading.value = false
   }

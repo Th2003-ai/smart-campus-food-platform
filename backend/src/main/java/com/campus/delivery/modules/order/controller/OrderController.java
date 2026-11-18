@@ -9,7 +9,6 @@ import com.campus.delivery.modules.order.dto.CreateOrderRequest;
 import com.campus.delivery.modules.order.dto.OrderVO;
 import com.campus.delivery.modules.order.service.OrderService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,7 +37,7 @@ public class OrderController {
     @RateLimit(name = "order:create", limit = 10, seconds = 60, message = "下单过于频繁")
     @RequiresPerm("order:write")
     @PostMapping
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<OrderVO> create(@RequestBody CreateOrderRequest request,
                                   @RequestHeader(value = "X-Request-Id", required = false) String requestId) {
         return Result.ok(orderService.createOrder(UserContext.getUserId(), request, requestId));
@@ -61,7 +60,7 @@ public class OrderController {
     @Operation(summary = "取消订单", description = "仅待接单状态可取消，取消后回补库存")
     @RequiresPerm("order:write")
     @PostMapping("/{id}/cancel")
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<Void> cancel(@PathVariable String id, @RequestParam(required = false) String reason) {
         orderService.cancelByStudent(UserContext.getUserId(), id, reason);
         return Result.ok();
@@ -78,7 +77,7 @@ public class OrderController {
     @Operation(summary = "自取订单确认取餐", description = "下单学生或店铺商户均可操作，谁先点谁生效")
     @RequiresPerm("order:transit")
     @PostMapping("/{id}/pickup")
-    @RequiresRole({RoleEnum.STUDENT, RoleEnum.MERCHANT})
+    @RequiresRole({"STUDENT", "MERCHANT"})
     public Result<Void> confirmPickup(@PathVariable String id) {
         orderService.confirmSelfPickup(id, UserContext.getUserId(), UserContext.getRole());
         return Result.ok();
