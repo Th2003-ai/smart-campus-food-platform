@@ -17,6 +17,18 @@ mysql -u root -p campus_ai_delivery < data.sql
 
 或在客户端（Navicat / DBeaver / DataGrip）中依次打开并执行两个脚本。
 
+### 已经建过库的本地环境怎么升级
+
+除口令外，表结构有增量改动时按时间顺序执行 `upgrade-*.sql`：
+
+```bash
+# 订单幂等（orders.request_id + 唯一索引）
+mysql -u root -p campus_ai_delivery < upgrade-2026-10-21-order-idempotent.sql
+
+# 角色数据化（新增 sys_role 表；sys_user.role / sys_role_permission.role 加宽到 32）
+mysql -u root -p campus_ai_delivery < upgrade-2026-11-17-sys-role.sql
+```
+
 ## 三、演示账号
 
 | 角色 | 登录账号 | 初始密码 | 说明 |
@@ -52,11 +64,11 @@ mysql -u root -p campus_ai_delivery < reset-demo-password.sql
 
 不要为了改口令重跑 `schema.sql` —— 它开头是 `DROP DATABASE`，会清空整库。
 
-## 四、表清单（35 张，按数据责任域分组）
+## 四、表清单（36 张，按数据责任域分组）
 
 | 责任域 | 主责 | 表 |
 | --- | --- | --- |
-| 用户与画像域 | 成员1（权限协助：成员4） | `sys_user`、`student`、`diet_profile`、`user_address`、`user_favorite`、`merchant`、`rider`、`admin`、`sys_role_permission` |
+| 用户与画像域 | 成员1（权限协助：成员4） | `sys_user`、`sys_role`、`sys_role_permission`、`student`、`diet_profile`、`user_address`、`user_favorite`、`merchant`、`rider`、`admin` |
 | 商品与经营域 | 成员2 | `shop_category`、`shop`、`dish_category`、`dish`、`dish_spec`、`dish_image`、`review`、`review_image`、`review_tag` |
 | 交易与配送域 | 成员4（协同：成员2） | `cart_item`、`orders`、`order_item`、`order_status_log`、`delivery_record`、`grab_log`、`payment_record` |
 | AI 与运营域 | 成员3（成员1/2 提供业务数据） | `ai_config`、`ai_chat_session`、`ai_chat_message`、`knowledge_base`、`ticket`、`recommend_record`、`diet_report` |
@@ -74,6 +86,11 @@ mysql -u root -p campus_ai_delivery < reset-demo-password.sql
 7. **AI 结果可追溯**：`review`、`recommend_record`、`diet_report` 均保存 `model_version` 与生成时间。
 8. **软删除**：`sys_user`、`shop`、`dish`、`user_address` 使用 `deleted` 字段逻辑删除。
 9. **索引**：订单表按「用户+状态」「店铺+状态」「骑手+状态」建立组合索引，对应三端的主要查询路径。
+10. **角色是数据**：`sys_role` 存角色字典（编码/名称/启停/是否可注册/**所属端 portal**/**首页 home_path**），
+    `sys_user.role` 与 `sys_role_permission.role` 引用其 `code`。新增角色只需插一行 + 在管理端勾权限码，
+    不需要改 Java 枚举或前端代码；`builtin=1` 的四个内置角色供四端入口使用，不可删除。
+    `portal` 决定角色能进哪套页面与接口（STUDENT/MERCHANT/RIDER/ADMIN），`home_path` 决定登录后首页；
+    不配置 portal 的角色登录后只会看到「暂无工作台」提示页。
 
 ## 六、变更规则
 

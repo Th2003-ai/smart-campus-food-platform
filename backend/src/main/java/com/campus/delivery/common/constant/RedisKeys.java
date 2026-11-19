@@ -16,6 +16,9 @@ public final class RedisKeys {
     /** 角色权限缓存：auth:perm:{role} */
     public static final String ROLE_PERMISSION = "auth:perm:";
 
+    /** 角色字典缓存：cache:role:all（角色列表，10 分钟） */
+    public static final String ROLE_LIST = "cache:role:all";
+
     /** 热门店铺缓存（有序集合，score 为月销量） */
     public static final String HOT_SHOP = "cache:shop:hot";
 

@@ -18,7 +18,8 @@ import com.campus.delivery.modules.user.mapper.StudentMapper;
 import com.campus.delivery.modules.user.mapper.SysUserMapper;
 import com.campus.delivery.security.JwtUtils;
 import com.campus.delivery.security.LoginUser;
-import com.campus.delivery.security.RoleEnum;
+import com.campus.delivery.modules.admin.entity.SysRole;
+import com.campus.delivery.modules.admin.service.RoleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -66,16 +67,26 @@ public class AuthService {
     private final DeliveryService deliveryService;
     /** 角色授权矩阵（登录时下发权限码） */
     private final PermissionService permissionService;
+    /** 角色字典（角色来自 sys_role，不再是枚举） */
+    private final RoleService roleService;
 
     /** 登录 */
     public LoginResponse login(LoginRequest request) {
         SysUser user = findByUsername(request.getUsername());
-        if (user == null || !PasswordGenerator.matches(request.getPassword(), user.getPassword())) {
+        // 账号不存在：统一提示，不暴露「这个账号存在但密码错」之外的信息
+        if (user == null) {
             throw new BusinessException(CODE_LOGIN_FAILED, "账号或密码错误");
         }
+        // 账号停用：在密码校验之前判断，保证停用账号无论密码对错都能看到明确提示
         if (user.getStatus() != null && user.getStatus() == 0) {
-            throw new BusinessException(CODE_ACCOUNT_DISABLED, "账号已被禁用，请联系管理员");
+            log.warn("停用账号尝试登录: username={}, ip 已记录于访问日志", request.getUsername());
+            throw new BusinessException(CODE_ACCOUNT_DISABLED, "该账号已被停用，请联系管理员");
         }
+        if (!PasswordGenerator.matches(request.getPassword(), user.getPassword())) {
+            throw new BusinessException(CODE_LOGIN_FAILED, "账号或密码错误");
+        }
+        // 角色必须在 sys_role 中存在且启用：角色停用后不允许再登录（管理端可随时停用角色）
+        SysRole role = roleService.requireEnabled(user.getRole());
         if (StringUtils.hasText(request.getRole())
                 && !request.getRole().equalsIgnoreCase(user.getRole())) {
             throw new BusinessException(CODE_ROLE_MISMATCH, "账号角色与当前登录入口不匹配");
@@ -87,7 +98,8 @@ public class AuthService {
         update.setLastLoginTime(LocalDateTime.now());
         sysUserMapper.updateById(update);
 
-        LoginUser loginUser = new LoginUser(user.getId(), user.getUsername(), user.getRole(), user.getNickname());
+        LoginUser loginUser = new LoginUser(user.getId(), user.getUsername(), user.getRole(),
+                role.getPortal(), user.getNickname());
         String token = jwtUtils.generateToken(loginUser);
 
         LoginResponse response = new LoginResponse();
@@ -96,6 +108,8 @@ public class AuthService {
         response.setUsername(user.getUsername());
         response.setNickname(user.getNickname());
         response.setRole(user.getRole());
+        response.setPortal(role.getPortal());
+        response.setHomePath(role.getHomePath());
         response.setAvatar(user.getAvatar());
         response.setExpiresIn(jwtUtils.getExpireMinutes() * 60);
         // 下发该角色的权限码，前端据此渲染菜单/按钮（与后端 @RequiresPerm 同一份数据）
@@ -118,31 +132,33 @@ public class AuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void register(RegisterRequest request) {
-        RoleEnum role = resolveRegisterRole(request.getRole());
-        String username = resolveUsername(role, request);
+        String roleCode = resolveRegisterRole(request.getRole());
+        String username = resolveUsername(roleCode, request);
 
         if (findByUsername(username) != null) {
             throw new BusinessException(CODE_USERNAME_EXISTS,
-                    role == RoleEnum.STUDENT ? "该学号已注册" : "该手机号已注册");
+                    "STUDENT".equalsIgnoreCase(roleCode) ? "该学号已注册" : "该手机号已注册");
         }
 
         SysUser user = new SysUser();
         user.setUsername(username);
         user.setPassword(PasswordGenerator.encode(request.getPassword()));
-        user.setRole(role.getCode());
-        user.setNickname(resolveNickname(role, request));
+        user.setRole(roleCode);
+        user.setNickname(resolveNickname(roleCode, request));
         user.setPhone(trimToNull(request.getPhone()));
         user.setStatus(1);
         sysUserMapper.insert(user);
 
-        switch (role) {
-            case STUDENT -> createStudentProfile(user.getId(), request);
-            case MERCHANT -> createMerchantProfile(user.getId(), request);
-            case RIDER -> createRiderProfile(user.getId(), request);
-            default -> throw new BusinessException(CODE_ROLE_NOT_REGISTRABLE, "该角色不开放注册");
+        // 角色决定要建哪种档案；新增角色若没有专属档案，只建账号不建档案
+        if ("STUDENT".equalsIgnoreCase(roleCode)) {
+            createStudentProfile(user.getId(), request);
+        } else if ("MERCHANT".equalsIgnoreCase(roleCode)) {
+            createMerchantProfile(user.getId(), request);
+        } else if ("RIDER".equalsIgnoreCase(roleCode)) {
+            createRiderProfile(user.getId(), request);
         }
 
-        log.info("注册成功: role={}, username={}, userId={}", role.getCode(), username, user.getId());
+        log.info("注册成功: role={}, username={}, userId={}", roleCode, username, user.getId());
     }
 
     /** 学生档案 + 空白饮食档案 */
@@ -185,25 +201,21 @@ public class AuthService {
                 trimToNull(request.getStudentCardNo()), trimToNull(request.getVehicleType()));
     }
 
-    /** 校验注册角色：只允许 STUDENT / MERCHANT / RIDER */
-    private RoleEnum resolveRegisterRole(String roleCode) {
+    /**
+     * 校验注册角色：角色必须存在于 {@code sys_role}、处于启用状态、且 {@code allow_register=1}。
+     *
+     * <p>「哪些角色能自助注册」是数据（角色管理页可改），不再是代码里的枚举判断。
+     */
+    private String resolveRegisterRole(String roleCode) {
         if (!StringUtils.hasText(roleCode)) {
             throw new BusinessException(CODE_FIELD_REQUIRED, "请选择注册角色");
         }
-        RoleEnum role = RoleEnum.of(roleCode.trim());
-        if (role == null) {
-            throw new BusinessException(CODE_ROLE_NOT_REGISTRABLE, "不支持的注册角色：" + roleCode);
-        }
-        if (role == RoleEnum.ADMIN) {
-            throw new BusinessException(CODE_ROLE_NOT_REGISTRABLE,
-                    "管理员账号不开放注册，请使用系统预置的管理员账号");
-        }
-        return role;
+        return roleService.requireRegisterable(roleCode.trim()).getCode();
     }
 
-    /** 学生用学号、商户和骑手用手机号作为登录账号 */
-    private String resolveUsername(RoleEnum role, RegisterRequest request) {
-        if (role == RoleEnum.STUDENT) {
+    /** 学生用学号、其他角色用手机号作为登录账号 */
+    private String resolveUsername(String roleCode, RegisterRequest request) {
+        if ("STUDENT".equalsIgnoreCase(roleCode)) {
             String studentNo = trimToNull(request.getStudentNo());
             if (!StringUtils.hasText(studentNo)) {
                 throw new BusinessException(CODE_FIELD_REQUIRED, "学生注册必须填写学号");
@@ -217,14 +229,18 @@ public class AuthService {
     }
 
     /** 昵称：学生用姓名（缺省用学号）、商户用商户名、骑手用真实姓名 */
-    private String resolveNickname(RoleEnum role, RegisterRequest request) {
-        String candidate = switch (role) {
-            case STUDENT -> StringUtils.hasText(request.getRealName())
+    private String resolveNickname(String roleCode, RegisterRequest request) {
+        String candidate;
+        if ("STUDENT".equalsIgnoreCase(roleCode)) {
+            candidate = StringUtils.hasText(request.getRealName())
                     ? request.getRealName() : request.getStudentNo();
-            case MERCHANT -> request.getMerchantName();
-            case RIDER -> request.getRealName();
-            default -> null;
-        };
+        } else if ("MERCHANT".equalsIgnoreCase(roleCode)) {
+            candidate = request.getMerchantName();
+        } else if ("RIDER".equalsIgnoreCase(roleCode)) {
+            candidate = request.getRealName();
+        } else {
+            candidate = null;
+        }
         return trimToNull(candidate);
     }
 

@@ -1,12 +1,14 @@
 package com.campus.delivery.modules.review.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 评价表。主责：成员2。
@@ -60,4 +62,13 @@ public class Review implements Serializable {
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
+
+    /**
+     * 评价图片地址列表（非数据库字段）。
+     *
+     * <p>由 {@code ReviewService} 在查询后按 {@code review_image} 批量拼装，
+     * 避免每条评价单独查一次图片（N+1）。
+     */
+    @TableField(exist = false)
+    private List<String> images;
 }

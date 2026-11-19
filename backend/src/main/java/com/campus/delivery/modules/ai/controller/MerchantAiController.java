@@ -4,7 +4,6 @@ import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.ai.service.BusinessAnalysisService;
 import com.campus.delivery.modules.ai.service.ReviewAnalysisService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +22,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/merchant/ai")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.MERCHANT)
+@RequiresRole("MERCHANT")
 public class MerchantAiController {
 
     private final ReviewAnalysisService reviewAnalysisService;

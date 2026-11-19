@@ -6,7 +6,6 @@ import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.dish.entity.Dish;
 import com.campus.delivery.modules.dish.entity.DishCategory;
 import com.campus.delivery.modules.dish.service.DishService;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.security.RequiresRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,7 +30,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/merchant")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.MERCHANT)
+@RequiresRole("MERCHANT")
 public class MerchantDishController {
 
     private final DishService dishService;

@@ -3,7 +3,6 @@ package com.campus.delivery.modules.admin.controller;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.admin.service.DashboardService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +21,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/dashboard")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.ADMIN)
+@RequiresRole("ADMIN")
 public class AdminDashboardController {
 
     private final DashboardService dashboardService;

@@ -10,7 +10,6 @@ import com.campus.delivery.modules.ai.service.NlOrderService;
 import com.campus.delivery.modules.ai.service.RecommendService;
 import com.campus.delivery.modules.ai.service.SemanticSearchService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,7 +42,7 @@ public class AiController {
     @Operation(summary = "AI 自然语言点餐", description = "输入「20 块以内、不辣、有肉」这类描述，返回匹配菜品")
     @RateLimit(name = "ai:order", limit = 20, seconds = 300, message = "AI 点餐调用过于频繁")
     @PostMapping("/order")
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<AiOrderResponse> aiOrder(@RequestBody @Valid AiChatRequest request) {
         return Result.ok(nlOrderService.parseAndMatch(UserContext.getUserId(), request));
     }
@@ -56,7 +55,7 @@ public class AiController {
 
     @Operation(summary = "个性化推荐", description = "scene 可选：HOME / AI_ORDER / SEARCH")
     @GetMapping("/recommend")
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<Map<String, Object>> recommend(@RequestParam(required = false) String scene,
                                                  @RequestParam(required = false) Integer limit) {
         return Result.ok(recommendService.recommend(UserContext.getUserId(), scene, limit));
@@ -64,7 +63,7 @@ public class AiController {
 
     @Operation(summary = "饮食分析报告", description = "days：7 近 7 天 / 30 近 30 天")
     @GetMapping("/diet-report")
-    @RequiresRole(RoleEnum.STUDENT)
+    @RequiresRole("STUDENT")
     public Result<Map<String, Object>> dietReport(@RequestParam(defaultValue = "7") Integer days) {
         return Result.ok(dietAnalysisService.report(UserContext.getUserId(), days));
     }

@@ -8,7 +8,6 @@ import com.campus.delivery.modules.order.dto.OrderVO;
 import com.campus.delivery.modules.order.entity.Order;
 import com.campus.delivery.modules.order.service.OrderService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/merchant/orders")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.MERCHANT)
+@RequiresRole("MERCHANT")
 public class MerchantOrderController {
 
     private final OrderService orderService;

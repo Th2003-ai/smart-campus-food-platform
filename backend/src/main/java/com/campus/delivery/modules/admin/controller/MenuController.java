@@ -5,7 +5,6 @@ import com.campus.delivery.modules.admin.entity.SysMenu;
 import com.campus.delivery.modules.admin.service.MenuService;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +23,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/menu")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.ADMIN)
+@RequiresRole("ADMIN")
 public class MenuController {
 
     private final MenuService menuService;

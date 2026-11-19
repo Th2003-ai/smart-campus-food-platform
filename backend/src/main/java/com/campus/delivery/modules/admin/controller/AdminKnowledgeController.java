@@ -4,7 +4,6 @@ import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.ai.entity.KnowledgeBase;
 import com.campus.delivery.modules.ai.service.KnowledgeBaseService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +28,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/knowledge")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.ADMIN)
+@RequiresRole("ADMIN")
 public class AdminKnowledgeController {
 
     private final KnowledgeBaseService knowledgeBaseService;

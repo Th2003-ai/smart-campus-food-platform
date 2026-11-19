@@ -277,7 +277,8 @@ function handleFailure(tip?: string) {
 /* -------------------- 登录跳转 -------------------- */
 function goHome(role: string) {
   const redirect = route.query.redirect as string | undefined
-  router.push(redirect || ROLE_HOME[role] || '/login')
+  const home = userStore.home || ROLE_HOME[role] || '/no-workspace'
+  router.push(redirect || home)
 }
 
 /* -------------------- 账号登录 -------------------- */

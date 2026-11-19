@@ -24,7 +24,7 @@ CREATE TABLE sys_user (
     id           VARCHAR(32)  NOT NULL COMMENT '用户ID',
     username     VARCHAR(50)  NOT NULL COMMENT '登录账号（学生用学号，商户/骑手用手机号，管理员自定义）',
     password     VARCHAR(100) NOT NULL COMMENT '密码（BCrypt 加盐哈希，禁止明文）',
-    role         VARCHAR(20)  NOT NULL COMMENT '角色：STUDENT/MERCHANT/RIDER/ADMIN',
+    role         VARCHAR(32)  NOT NULL COMMENT '角色编码，引用 sys_role.code（角色是数据，不再写死枚举）',
     nickname     VARCHAR(50)           DEFAULT NULL COMMENT '昵称',
     phone        VARCHAR(20)           DEFAULT NULL COMMENT '手机号（返回前端时脱敏）',
     avatar       VARCHAR(255)          DEFAULT NULL COMMENT '头像URL（对象存储）',
@@ -152,10 +152,26 @@ CREATE TABLE admin (
     UNIQUE KEY uk_user_id (user_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='管理员表';
 
+-- 角色表（RBAC：角色字典，数据驱动，不再写死在代码里）
+CREATE TABLE sys_role (
+    code           VARCHAR(32) NOT NULL COMMENT '角色编码（大写字母/数字/下划线）',
+    name           VARCHAR(50) NOT NULL COMMENT '角色名称',
+    description    VARCHAR(255)         DEFAULT NULL COMMENT '角色说明',
+    sort           INT         NOT NULL DEFAULT 0 COMMENT '排序，越小越靠前',
+    builtin        TINYINT     NOT NULL DEFAULT 0 COMMENT '1=内置角色（四端入口用，不可删除）',
+    status         TINYINT     NOT NULL DEFAULT 1 COMMENT '1启用 0停用（停用后不能登录）',
+    allow_register TINYINT     NOT NULL DEFAULT 0 COMMENT '1=允许自助注册',
+    portal         VARCHAR(20)          DEFAULT NULL COMMENT '所属端：STUDENT/MERCHANT/RIDER/ADMIN，决定可用页面与接口',
+    home_path      VARCHAR(200)         DEFAULT NULL COMMENT '登录后首页路由，如 /admin/dashboard',
+    create_time    DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time    DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='角色表（RBAC 角色字典）';
+
 -- 角色权限表（RBAC：角色-权限-数据范围）
 CREATE TABLE sys_role_permission (
     id           VARCHAR(32) NOT NULL COMMENT '主键',
-    role         VARCHAR(20) NOT NULL COMMENT '角色：STUDENT/MERCHANT/RIDER/ADMIN',
+    role         VARCHAR(32) NOT NULL COMMENT '角色编码，引用 sys_role.code（角色是数据）',
     permission   VARCHAR(64) NOT NULL COMMENT '权限标识，如 order:read / dish:write',
     data_scope   VARCHAR(32) NOT NULL DEFAULT 'SELF' COMMENT '数据范围：ALL全部 / SHOP本店 / SELF本人',
     create_time  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

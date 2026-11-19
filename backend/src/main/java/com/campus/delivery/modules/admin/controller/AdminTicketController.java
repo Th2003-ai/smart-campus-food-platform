@@ -5,7 +5,6 @@ import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.admin.entity.Ticket;
 import com.campus.delivery.modules.admin.service.TicketService;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.security.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,7 +29,7 @@ public class AdminTicketController {
 
     @Operation(summary = "工单列表（管理端）")
     @GetMapping
-    @RequiresRole(RoleEnum.ADMIN)
+    @RequiresRole("ADMIN")
     public Result<PageResult<Ticket>> list(@RequestParam(required = false) Integer status,
                                            @RequestParam(defaultValue = "1") long pageNum,
                                            @RequestParam(defaultValue = "10") long pageSize) {
@@ -45,7 +44,7 @@ public class AdminTicketController {
 
     @Operation(summary = "处理工单")
     @PostMapping("/{id}/handle")
-    @RequiresRole(RoleEnum.ADMIN)
+    @RequiresRole("ADMIN")
     public Result<Void> handle(@PathVariable String id,
                                @RequestParam String reply,
                                @RequestParam(defaultValue = "false") boolean close) {

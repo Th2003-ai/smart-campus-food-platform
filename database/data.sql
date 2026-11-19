@@ -42,8 +42,15 @@ INSERT INTO user_address (id, user_id, receiver, phone, campus_area, building, d
 ('AD00000000000000000000000000001', 'U000000000000000000000000000001', '演示学生', '13800000001', '主校区', '8号宿舍楼', '302室', 1);
 
 -- ---------------------------------------------------------------------
--- 2. 角色权限（RBAC）
+-- 2. 角色与角色权限（RBAC）
+--    角色是数据（sys_role），新增角色只需插一行，不用改代码
 -- ---------------------------------------------------------------------
+INSERT INTO sys_role (code, name, description, sort, builtin, status, allow_register, portal, home_path) VALUES
+('STUDENT',  '学生',   '学生端用户：浏览、下单、评价、查看饮食报告', 10, 1, 1, 1, 'STUDENT',  '/student/home'),
+('MERCHANT', '商户',   '商户端用户：管理店铺、菜品、订单与评价',     20, 1, 1, 1, 'MERCHANT', '/merchant/dashboard'),
+('RIDER',    '骑手',   '骑手端用户：抢单、取餐与配送',               30, 1, 1, 1, 'RIDER',    '/rider/hall'),
+('ADMIN',    '管理员', '管理端用户：审核、配置、角色与权限管理',     40, 1, 1, 0, 'ADMIN',    '/admin/dashboard');
+
 INSERT INTO sys_role_permission (id, role, permission, data_scope) VALUES
 ('P00000000000000000000000000001', 'STUDENT',  'shop:read',        'ALL'),
 ('P00000000000000000000000000002', 'STUDENT',  'order:write',      'SELF'),

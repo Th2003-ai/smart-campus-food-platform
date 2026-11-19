@@ -7,9 +7,9 @@
         <!-- 角色选择 -->
         <el-form-item label="注册角色" prop="role">
           <el-radio-group v-model="form.role" @change="onRoleChange">
-            <el-radio-button value="STUDENT">学生</el-radio-button>
-            <el-radio-button value="MERCHANT">商户</el-radio-button>
-            <el-radio-button value="RIDER">骑手</el-radio-button>
+            <el-radio-button v-for="item in roleOptions" :key="item.code" :value="item.code">
+              {{ item.name }}
+            </el-radio-button>
           </el-radio-group>
         </el-form-item>
 
@@ -96,11 +96,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
 
 import { register, type RegisterParams, type RegisterRole } from '@/api/auth'
+import { listRegisterableRoles } from '@/api/role'
+
+/** 可注册角色来自后端 sys_role（allow_register=1），新增角色不需要改前端 */
+const roleOptions = ref<Array<{ code: string; name: string }>>([
+  { code: 'STUDENT', name: '学生' },
+  { code: 'MERCHANT', name: '商户' },
+  { code: 'RIDER', name: '骑手' }
+])
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
@@ -120,6 +128,23 @@ const form = reactive({
   studentCardNo: '',
   vehicleType: ''
 })
+
+/** 拉取可注册角色（失败则保留默认三项） */
+async function loadRoleOptions() {
+  try {
+    const rows = await listRegisterableRoles()
+    if (rows.length > 0) {
+      roleOptions.value = rows
+      if (!rows.some((item) => item.code === form.role)) {
+        form.role = rows[0].code as RegisterRole
+      }
+    }
+  } catch {
+    // 接口失败时保留默认三项
+  }
+}
+
+onMounted(loadRoleOptions)
 
 /**
  * 校验规则按角色动态切换：
@@ -155,10 +180,15 @@ const rules = computed<FormRules>(() => {
     }
   }
 
-  return {
-    ...base,
-    realName: [{ required: true, message: '请输入真实姓名', trigger: 'blur' }]
+  if (form.role === 'RIDER') {
+    return {
+      ...base,
+      realName: [{ required: true, message: '请输入真实姓名', trigger: 'blur' }]
+    }
   }
+
+  // 数据驱动的新角色：没有专属档案字段，只校验公共字段
+  return base
 })
 
 /** 切换角色后清掉校验残留的红字 */
@@ -193,24 +223,31 @@ async function onSubmit() {
             contactName: form.contactName.trim() || undefined,
             licenseNo: form.licenseNo.trim() || undefined
           }
-        : {
-            role: form.role,
-            password: form.password,
-            phone: form.phone.trim(),
-            realName: form.realName.trim(),
-            studentCardNo: form.studentCardNo.trim() || undefined,
-            vehicleType: form.vehicleType || undefined
-          }
+        : form.role === 'RIDER'
+          ? {
+              role: form.role,
+              password: form.password,
+              phone: form.phone.trim(),
+              realName: form.realName.trim(),
+              studentCardNo: form.studentCardNo.trim() || undefined,
+              vehicleType: form.vehicleType || undefined
+            }
+          : {
+              // 数据驱动的新角色：只交公共字段，后端按角色决定要不要建档案
+              role: form.role,
+              password: form.password,
+              phone: form.phone.trim()
+            }
 
   loading.value = true
   try {
     await register(payload)
-    const tips: Record<RegisterRole, string> = {
+    const tips: Record<string, string> = {
       STUDENT: '注册成功，请使用学号登录',
       MERCHANT: '注册成功，请等待管理员审核通过后使用商户功能',
       RIDER: '注册成功，请等待管理员审核通过后开始接单'
     }
-    ElMessage.success(tips[form.role])
+    ElMessage.success(tips[form.role] ?? '注册成功，请使用注册时填写的账号登录')
     router.push('/login')
   } finally {
     loading.value = false

@@ -21,6 +21,12 @@ public class LoginResponse implements Serializable {
 
     private String role;
 
+    /** 所属端（sys_role.portal）：STUDENT/MERCHANT/RIDER/ADMIN，决定进入哪套页面 */
+    private String portal;
+
+    /** 登录后首页路由（sys_role.home_path），为空时前端落到「暂无工作台」 */
+    private String homePath;
+
     private String avatar;
 
     /** Token 有效期（秒） */

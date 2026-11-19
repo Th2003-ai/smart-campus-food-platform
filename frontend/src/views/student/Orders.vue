@@ -106,6 +106,18 @@
             placeholder="说说这次的用餐体验"
           />
         </el-form-item>
+        <el-form-item label="上传图片">
+          <el-upload
+            v-model:file-list="reviewFiles"
+            :auto-upload="false"
+            list-type="picture-card"
+            :limit="9"
+            accept="image/*"
+          >
+            <div class="upload-trigger">＋</div>
+          </el-upload>
+          <div class="upload-tip">最多 9 张，提交时统一上传</div>
+        </el-form-item>
         <el-form-item label="匿名">
           <el-switch v-model="reviewForm.anonymous" />
         </el-form-item>
@@ -122,9 +134,11 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadUserFile } from 'element-plus'
 
 import { cancelOrder, listMyOrders, type OrderVO } from '@/api/order'
 import { submitReview } from '@/api/review'
+import { batchUpload } from '@/api/file'
 import {
   canCancelOrder,
   canReviewOrder,
@@ -145,6 +159,8 @@ const page = reactive({ pageNum: 1, pageSize: 10, total: 0 })
 const reviewVisible = ref(false)
 const reviewSubmitting = ref(false)
 const reviewOrderId = ref('')
+/** 待上传的图片（提交时才真正上传，避免选了又取消也占空间） */
+const reviewFiles = ref<UploadUserFile[]>([])
 const reviewForm = reactive({
   tasteScore: 5,
   serviceScore: 5,
@@ -203,6 +219,7 @@ function openReview(orderId: string) {
   reviewForm.deliveryScore = 5
   reviewForm.content = ''
   reviewForm.anonymous = false
+  reviewFiles.value = []
   reviewVisible.value = true
 }
 
@@ -213,13 +230,29 @@ async function onSubmitReview() {
   }
   reviewSubmitting.value = true
   try {
+    // 先把选中的图片上传到文件模块，拿到 URL 再随评价一起提交
+    const images: string[] = []
+    const rawFiles = reviewFiles.value
+      .map((file) => file.raw)
+      .filter((file): file is NonNullable<typeof file> => file != null)
+    if (rawFiles.length > 0) {
+      const results = await batchUpload(rawFiles)
+      results
+        .filter((item) => item.success && item.downloadUrl)
+        .forEach((item) => images.push(item.downloadUrl as string))
+      if (images.length < rawFiles.length) {
+        ElMessage.warning('部分图片上传失败，已跳过')
+      }
+    }
+
     await submitReview({
       orderId: reviewOrderId.value,
       tasteScore: reviewForm.tasteScore,
       serviceScore: reviewForm.serviceScore || undefined,
       deliveryScore: reviewForm.deliveryScore || undefined,
       content: reviewForm.content.trim() || undefined,
-      anonymous: reviewForm.anonymous
+      anonymous: reviewForm.anonymous,
+      images: images.length > 0 ? images : undefined
     })
     ElMessage.success('评价成功，感谢反馈')
     reviewVisible.value = false
@@ -339,5 +372,16 @@ onMounted(load)
 .pager {
   margin-top: 16px;
   justify-content: center;
+}
+.upload-trigger {
+  font-size: 24px;
+  line-height: 1;
+  color: #8c939d;
+}
+.upload-tip {
+  width: 100%;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
 }
 </style>

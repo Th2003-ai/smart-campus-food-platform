@@ -12,6 +12,8 @@ import com.campus.delivery.modules.cart.entity.CartItem;
 import com.campus.delivery.modules.cart.service.CartService;
 import com.campus.delivery.modules.dish.entity.Dish;
 import com.campus.delivery.modules.dish.service.DishService;
+import com.campus.delivery.modules.mq.OrderMessage;
+import com.campus.delivery.modules.mq.OrderMessageProducer;
 import com.campus.delivery.modules.order.dto.CreateOrderRequest;
 import com.campus.delivery.modules.order.dto.OrderVO;
 import com.campus.delivery.modules.order.entity.Order;
@@ -22,7 +24,6 @@ import com.campus.delivery.modules.order.mapper.OrderMapper;
 import com.campus.delivery.modules.order.mapper.OrderStatusLogMapper;
 import com.campus.delivery.modules.shop.entity.Shop;
 import com.campus.delivery.modules.shop.service.ShopService;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.websocket.OrderNotifyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -82,6 +83,8 @@ public class OrderService {
     private final OrderTimeoutQueue orderTimeoutQueue;
     /** 模拟支付：扣余额 / 退款 / 写 payment_record */
     private final com.campus.delivery.modules.payment.service.PaymentService paymentService;
+    /** 消息队列生产者：下单成功后异步投递订单消息 */
+    private final OrderMessageProducer orderMessageProducer;
 
     // ==================================================================
     // 学生端
@@ -152,6 +155,17 @@ public class OrderService {
                 stringRedisTemplate.opsForValue()
                         .set(idemKey, vo.getOrder().getId(), Duration.ofMinutes(5));
             }
+
+            // 订单创建成功、事务提交后，投递消息到 RabbitMQ，由消费者异步处理后续业务
+            Order order = vo.getOrder();
+            OrderMessage message = new OrderMessage();
+            message.setOrderId(order.getId());
+            message.setOrderNo(order.getOrderNo());
+            message.setUserId(order.getUserId());
+            message.setTotalAmount(order.getTotalAmount());
+            message.setCreateTime(LocalDateTime.now());
+            orderMessageProducer.sendOrderCreate(message);
+
             return vo;
         } catch (DuplicateKeyException e) {
             log.warn("重复提交被数据库唯一索引拦截: userId={}, requestId={}", userId, requestId);
@@ -246,7 +260,7 @@ public class OrderService {
         statusLog.setFromStatus(null);
         statusLog.setToStatus(OrderStatus.PENDING_ACCEPT.getCode());
         statusLog.setOperatorId(userId);
-        statusLog.setOperatorRole(RoleEnum.STUDENT.getCode());
+        statusLog.setOperatorRole("STUDENT");
         statusLog.setReason("学生提交订单");
         orderStatusLogMapper.insert(statusLog);
 
@@ -280,10 +294,10 @@ public class OrderService {
     /** 订单详情（含越权校验） */
     public OrderVO getDetail(String orderId, String userId, String role) {
         Order order = requireOrder(orderId);
-        if (RoleEnum.STUDENT.getCode().equals(role) && !userId.equals(order.getUserId())) {
+        if ("STUDENT".equals(role) && !userId.equals(order.getUserId())) {
             throw new BusinessException(CODE_NO_PERMISSION, "无权查看他人订单");
         }
-        if (RoleEnum.RIDER.getCode().equals(role) && !userId.equals(order.getRiderId())) {
+        if ("RIDER".equals(role) && !userId.equals(order.getRiderId())) {
             throw new BusinessException(CODE_NO_PERMISSION, "无权查看未分配的订单");
         }
         return buildOrderVO(order, listItems(orderId));
@@ -299,7 +313,7 @@ public class OrderService {
         if (!OrderStatus.of(order.getOrderStatus()).equals(OrderStatus.PENDING_ACCEPT)) {
             throw new BusinessException(CODE_CANNOT_CANCEL, "订单已被商家接单，无法直接取消，请联系商家或提交客服工单");
         }
-        orderStateMachine.transit(order, OrderStatus.CANCELED, userId, RoleEnum.STUDENT.getCode(), reason);
+        orderStateMachine.transit(order, OrderStatus.CANCELED, userId, "STUDENT", reason);
         // 已取消，不再需要超时扫描
         orderTimeoutQueue.remove(orderId);
         restoreStock(orderId);
@@ -373,7 +387,7 @@ public class OrderService {
 
         OrderStatus before = OrderStatus.of(order.getOrderStatus());
         order = orderStateMachine.transit(order, targetStatus, shopService.getMerchantUserId(order.getShopId()),
-                RoleEnum.MERCHANT.getCode(), reason);
+                "MERCHANT", reason);
 
         // 出餐：生成取餐码并进入骑手抢单池
         if (targetStatus == OrderStatus.PENDING_PICKUP) {
@@ -408,7 +422,7 @@ public class OrderService {
             throw new BusinessException(30026, "骑手只能执行取餐、送达操作");
         }
         OrderStatus before = OrderStatus.of(order.getOrderStatus());
-        order = orderStateMachine.transit(order, target, riderId, RoleEnum.RIDER.getCode(), null);
+        order = orderStateMachine.transit(order, target, riderId, "RIDER", null);
 
         if (target == OrderStatus.DELIVERING) {
             removeFromGrabPool(orderId);
@@ -447,11 +461,11 @@ public class OrderService {
             throw new BusinessException(30030, "该订单为骑手配送，请由骑手完成送达");
         }
 
-        if (RoleEnum.STUDENT.getCode().equalsIgnoreCase(operatorRole)) {
+        if ("STUDENT".equalsIgnoreCase(operatorRole)) {
             if (!operatorId.equals(order.getUserId())) {
                 throw new BusinessException(CODE_NO_PERMISSION, "无权操作他人的订单");
             }
-        } else if (RoleEnum.MERCHANT.getCode().equalsIgnoreCase(operatorRole)) {
+        } else if ("MERCHANT".equalsIgnoreCase(operatorRole)) {
             if (!shopService.currentShopId().equals(order.getShopId())) {
                 throw new BusinessException(CODE_NO_PERMISSION, "无权操作其他店铺的订单");
             }
@@ -675,7 +689,7 @@ public class OrderService {
         // 用 StringRedisTemplate：member 就是订单ID，纯字符串才便于 redis-cli 排查
         stringRedisTemplate.opsForZSet().add(RedisKeys.GRAB_POOL, order.getId(),
                 System.currentTimeMillis());
-        orderNotifyHandler.broadcastToRole(RoleEnum.RIDER.getCode(), "GRAB_ORDER", statusPayload(order));
+        orderNotifyHandler.broadcastToRole("RIDER", "GRAB_ORDER", statusPayload(order));
     }
 
     private void removeFromGrabPool(String orderId) {

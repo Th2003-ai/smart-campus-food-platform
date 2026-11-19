@@ -3,7 +3,6 @@ package com.campus.delivery.modules.shop.controller;
 import com.campus.delivery.common.api.Result;
 import com.campus.delivery.modules.shop.entity.Shop;
 import com.campus.delivery.modules.shop.service.ShopService;
-import com.campus.delivery.security.RoleEnum;
 import com.campus.delivery.security.RequiresRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/merchant/shop")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.MERCHANT)
+@RequiresRole("MERCHANT")
 public class MerchantShopController {
 
     private final ShopService shopService;

@@ -6,12 +6,13 @@ import com.campus.delivery.common.exception.BusinessException;
 import com.campus.delivery.modules.admin.dto.RolePermItem;
 import com.campus.delivery.modules.admin.service.PermissionService;
 import com.campus.delivery.modules.user.entity.SysUser;
+import com.campus.delivery.security.RequiresPerm;
 import com.campus.delivery.security.RequiresRole;
-import com.campus.delivery.security.RoleEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,7 +36,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/perm")
 @RequiredArgsConstructor
-@RequiresRole(RoleEnum.ADMIN)
+@RequiresRole("ADMIN")
+@RequiresPerm("admin:all")
 public class AdminPermissionController {
 
     private final PermissionService permissionService;
@@ -105,6 +107,14 @@ public class AdminPermissionController {
     public Result<Void> resetPassword(@PathVariable String id, @RequestBody Map<String, String> payload) {
         String password = payload == null ? null : payload.get("password");
         permissionService.resetPassword(id, password);
+        return Result.ok();
+    }
+
+    @Operation(summary = "删除成员",
+            description = "逻辑删除（deleted=1）；不能删除自己，不能删除最后一个启用的管理员。删除后该角色若无其他用户即可删除")
+    @DeleteMapping("/users/{id}")
+    public Result<Void> deleteUser(@PathVariable String id) {
+        permissionService.deleteUser(id);
         return Result.ok();
     }
 

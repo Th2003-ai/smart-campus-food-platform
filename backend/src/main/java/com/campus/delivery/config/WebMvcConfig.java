@@ -32,6 +32,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
     private static final String[] PUBLIC_PATHS = {
             "/auth/login",
             "/auth/register",
+            // 注册页角色下拉：角色来自 sys_role，公开只读
+            "/auth/roles",
             "/shops/**",
             "/dishes/**",
             "/rank/**",
