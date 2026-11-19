@@ -16,7 +16,12 @@ import org.springframework.context.annotation.Configuration;
  * 消息以 JSON 传输，管理界面里能直接看到可读内容，方便演示排查。
  */
 @Configuration
-public class RabbitMqConfig {
+public class
+
+
+
+
+RabbitMqConfig {
 
     /** 订单创建队列（持久化） */
     @Bean

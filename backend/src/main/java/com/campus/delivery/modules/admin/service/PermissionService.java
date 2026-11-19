@@ -49,6 +49,22 @@ public class PermissionService {
     /** 数据范围枚举值 */
     private static final List<String> SCOPES = List.of("ALL", "SHOP", "SELF");
 
+    /**
+     * 权限码全集：矩阵的列固定为这份清单。
+     *
+     * <p>不能只从 sys_role_permission 里取现有值——某个码一旦被所有角色撤销，
+     * 它就会从矩阵里消失，管理员再也勾不回来。库里出现的新码仍然会并入（见 matrix()）。
+     */
+    private static final List<String> ALL_PERMS = List.of(
+            "admin:all",
+            "ai:business", "ai:use",
+            "delivery:transit",
+            "dish:read", "dish:write",
+            "order:read", "order:transit", "order:write",
+            "review:reply", "review:write",
+            "rider:grab", "rider:hall",
+            "shop:read");
+
     /** 管理员通配码，拥有它等于拥有一切权限（与前端 PERM_WILDCARD 一致） */
     public static final String WILDCARD = "admin:all";
 
@@ -94,8 +110,8 @@ public class PermissionService {
                         .orderByAsc(SysRolePermission::getRole)
                         .orderByAsc(SysRolePermission::getPermission));
 
-        // 权限码全集：以现有授权为准（这几个码就是业务动作的枚举）
-        TreeSet<String> perms = new TreeSet<>();
+        // 权限码全集：固定清单打底，库里出现的新码并入（新码不必改代码也能显示）
+        TreeSet<String> perms = new TreeSet<>(ALL_PERMS);
         // 角色 → (权限码 → 数据范围)
         Map<String, Map<String, String>> granted = new LinkedHashMap<>();
         for (String role : roleCodes) {
