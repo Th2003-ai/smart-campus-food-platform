@@ -12,6 +12,7 @@ import com.campus.delivery.modules.cart.entity.CartItem;
 import com.campus.delivery.modules.cart.service.CartService;
 import com.campus.delivery.modules.dish.entity.Dish;
 import com.campus.delivery.modules.dish.service.DishService;
+import com.campus.delivery.modules.mq.KafkaOrderProducer;
 import com.campus.delivery.modules.mq.OrderMessage;
 import com.campus.delivery.modules.mq.OrderMessageProducer;
 import com.campus.delivery.modules.order.dto.CreateOrderRequest;
@@ -85,6 +86,8 @@ public class OrderService {
     private final com.campus.delivery.modules.payment.service.PaymentService paymentService;
     /** 消息队列生产者：下单成功后异步投递订单消息 */
     private final OrderMessageProducer orderMessageProducer;
+    /** Kafka 生产者：同一条订单消息再投一份到 topic，与 RabbitMQ 并行 */
+    private final KafkaOrderProducer kafkaOrderProducer;
 
     // ==================================================================
     // 学生端
@@ -156,7 +159,7 @@ public class OrderService {
                         .set(idemKey, vo.getOrder().getId(), Duration.ofMinutes(5));
             }
 
-            // 订单创建成功、事务提交后，投递消息到 RabbitMQ，由消费者异步处理后续业务
+            // 订单创建成功、事务提交后，投递消息到 MQ（RabbitMQ 与 Kafka 双链路并行）
             Order order = vo.getOrder();
             OrderMessage message = new OrderMessage();
             message.setOrderId(order.getId());
@@ -164,7 +167,23 @@ public class OrderService {
             message.setUserId(order.getUserId());
             message.setTotalAmount(order.getTotalAmount());
             message.setCreateTime(LocalDateTime.now());
-            orderMessageProducer.sendOrderCreate(message);
+
+            // 链路一：RabbitMQ。MQ 不可用不应阻断下单——订单已经落库，
+            // 消息丢失属于「可接受降级」，记 WARN 由对账/补偿兜底，而不是让用户看到 500
+            try {
+                orderMessageProducer.sendOrderCreate(message);
+            } catch (Exception e) {
+                log.warn("【MQ生产者】RabbitMQ 投递失败，订单已落库，跳过: orderId={}, err={}",
+                        order.getId(), e.getMessage());
+            }
+
+            // 链路二：Kafka。同样是尽力而为，失败只记日志
+            try {
+                kafkaOrderProducer.sendOrderCreate(message);
+            } catch (Exception e) {
+                log.warn("【Kafka生产者】投递失败，订单已落库，跳过: orderId={}, err={}",
+                        order.getId(), e.getMessage());
+            }
 
             return vo;
         } catch (DuplicateKeyException e) {

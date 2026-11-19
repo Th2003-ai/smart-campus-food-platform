@@ -61,6 +61,30 @@ spring:
         acknowledge-mode: manual
         prefetch: 1
 
+  # Kafka 连接（本机默认 9092；与 RabbitMQ 并行，两条链路各发一份）
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      # acks=all + 重试：消息写满 ISR 才返回，失败重试 3 次
+      acks: all
+      retries: 3
+      properties:
+        linger.ms: 0
+        enable.idempotence: true
+    consumer:
+      group-id: g.order.create
+      auto-offset-reset: earliest
+      # 关掉自动提交，改由消费者处理成功后手动提交 offset
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.campus.delivery.modules.mq
+    listener:
+      ack-mode: manual_immediate
+
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

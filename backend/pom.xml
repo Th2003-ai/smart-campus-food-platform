@@ -60,6 +60,12 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
+        <!-- Kafka：订单消息的第二条链路，按 orderId 分区、消息可回溯重放 -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
         <!-- 持久层 -->
         <dependency>
             <groupId>com.baomidou</groupId>
