@@ -48,6 +48,19 @@ spring:
           min-idle: 2
           max-wait: 3000ms
 
+  # RabbitMQ 连接（本机默认 5672；账号密码可用环境变量覆盖）
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USERNAME:guest}
+    password: ${RABBIT_PASSWORD:guest}
+    virtual-host: ${RABBIT_VHOST:/}
+    # 消息确认：消费者手动 ACK，防止处理过程中宕机丢消息
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 1
+
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

@@ -54,6 +54,12 @@
             <artifactId>commons-pool2</artifactId>
         </dependency>
 
+        <!-- RabbitMQ：异步下单消息队列（生产者-消费者，削峰填谷） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
         <!-- 持久层 -->
         <dependency>
             <groupId>com.baomidou</groupId>
