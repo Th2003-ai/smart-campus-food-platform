@@ -107,6 +107,7 @@
             >
               确认交付（自取）
             </el-button>
+            <el-button size="small" text @click="openChat(vo.order.id)">聊天</el-button>
             <span
               v-if="vo.order.orderStatus === 2 && vo.order.deliveryType !== 2"
               class="text-muted"
@@ -133,6 +134,9 @@
         @current-change="load"
       />
     </el-card>
+
+    <!-- 订单实时聊天（商户 ↔ 学生 ↔ 骑手） -->
+    <OrderChat v-model="chatVisible" :order-id="chatOrderId" title="订单沟通" />
   </div>
 </template>
 
@@ -140,6 +144,15 @@
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
+import OrderChat from '@/components/OrderChat.vue'
+
+const chatVisible = ref(false)
+const chatOrderId = ref('')
+
+function openChat(orderId: string) {
+  chatOrderId.value = orderId
+  chatVisible.value = true
+}
 
 import {
   acceptOrder,

@@ -99,6 +99,20 @@ export class OrderSocket {
     this.ws = null
   }
 
+  /** 发送一帧消息（订单聊天用：{ type: 'CHAT', orderId, content }） */
+  send(type: string, data: Record<string, unknown>): boolean {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type, ...data }))
+      return true
+    }
+    return false
+  }
+
+  /** 是否已连接（组件据此决定要不要退回 REST 发送） */
+  get connected(): boolean {
+    return !!this.ws && this.ws.readyState === WebSocket.OPEN
+  }
+
   /** 连接成功后定时发送心跳，续期后端 Redis 在线标记（TTL 60s） */
   private startHeartbeat() {
     this.stopHeartbeat()

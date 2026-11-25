@@ -1,5 +1,9 @@
 package com.campus.delivery.websocket;
 
+import com.campus.delivery.common.exception.BusinessException;
+import com.campus.delivery.modules.chat.entity.ChatMessage;
+import com.campus.delivery.modules.chat.service.ChatService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -39,9 +43,14 @@ public class OrderNotifyHandler extends TextWebSocketHandler {
     /** role -> 该角色的全部连接（用于骑手大厅广播） */
     private static final Map<String, Set<WebSocketSession>> ROLE_SESSIONS = new ConcurrentHashMap<>();
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    /** LocalDateTime 需要 JavaTime 模块，否则聊天消息序列化会抛 InvalidDefinitionException */
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+            .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     private final com.campus.delivery.modules.delivery.service.RiderOnlineService riderOnlineService;
+
+    private final ChatService chatService;
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String userId = attr(session, "userId");
@@ -68,14 +77,48 @@ public class OrderNotifyHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+        String payload = message.getPayload();
         // 客户端心跳：回复 pong，并用心跳续期骑手在线状态
-        if ("ping".equals(message.getPayload())) {
+        if ("ping".equals(payload)) {
             String userId = attr(session, "userId");
             String role = attr(session, "role");
             if ("RIDER".equalsIgnoreCase(role) && userId != null) {
                 riderOnlineService.markOnlineByUserId(userId);
             }
             sendText(session, "{\"type\":\"PONG\"}");
+            return;
+        }
+        if (payload.startsWith("{")) {
+            handleChatMessage(session, payload);
+        }
+    }
+
+    /**
+     * 订单聊天帧：{@code {"type":"CHAT","orderId":"...","content":"..."}}。
+     *
+     * <p>落库后广播给订单三方（学生、商户、骑手），发送人也会收到自己的消息，
+     * 前端据此渲染回执，不需要本地先插一条再等服务器。
+     */
+    private void handleChatMessage(WebSocketSession session, String payload) {
+        String userId = attr(session, "userId");
+        String role = attr(session, "role");
+        if (userId == null) {
+            return;
+        }
+        try {
+            JsonNode node = MAPPER.readTree(payload);
+            if (!"CHAT".equals(node.path("type").asText())) {
+                return;
+            }
+            String orderId = node.path("orderId").asText("");
+            String content = node.path("content").asText("");
+            ChatMessage saved = chatService.send(orderId, userId, role, content);
+            chatService.participantList(orderId).forEach(pid -> sendToUser(pid, "CHAT", saved));
+        } catch (BusinessException e) {
+            sendText(session, buildPayload("CHAT_ERROR", Map.of("message", e.getMessage())));
+        } catch (Exception e) {
+            log.warn("聊天消息处理失败: userId={}, err={}", userId, e.getMessage());
+            sendText(session, buildPayload("CHAT_ERROR", Map.of("message", "消息发送失败")));
         }
     }
 

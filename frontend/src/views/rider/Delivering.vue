@@ -57,10 +57,14 @@
             >
               确认送达
             </el-button>
+            <el-button size="small" text @click="openChat(o.id)">聊天</el-button>
           </div>
         </div>
       </div>
     </el-card>
+
+    <!-- 订单实时聊天（骑手 ↔ 学生 ↔ 商户） -->
+    <OrderChat v-model="chatVisible" :order-id="chatOrderId" title="订单沟通" />
   </div>
 </template>
 
@@ -71,6 +75,15 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Order } from '@/api/order'
 import { deliverOrder, listRiderOrders, pickupOrder } from '@/api/rider'
 import { money } from '@/utils/dict'
+import OrderChat from '@/components/OrderChat.vue'
+
+const chatVisible = ref(false)
+const chatOrderId = ref('')
+
+function openChat(orderId: string) {
+  chatOrderId.value = orderId
+  chatVisible.value = true
+}
 
 const tab = ref('2')
 const orders = ref<Order[]>([])

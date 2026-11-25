@@ -65,6 +65,7 @@
               >
                 评价
               </el-button>
+              <el-button size="small" text @click="openChat(vo.order.id)">聊天</el-button>
               <el-button size="small" text type="primary" @click="router.push(`/student/orders/${vo.order.id}`)">
                 详情
               </el-button>
@@ -127,6 +128,9 @@
         <el-button type="primary" :loading="reviewSubmitting" @click="onSubmitReview">提交评价</el-button>
       </template>
     </el-dialog>
+
+    <!-- 订单实时聊天（学生 ↔ 商户 ↔ 骑手） -->
+    <OrderChat v-model="chatVisible" :order-id="chatOrderId" title="订单沟通" />
   </div>
 </template>
 
@@ -148,8 +152,17 @@ import {
   orderStatusText
 } from '@/utils/dict'
 import { dishCover } from '@/utils/image'
+import OrderChat from '@/components/OrderChat.vue'
 
 const router = useRouter()
+
+const chatVisible = ref(false)
+const chatOrderId = ref('')
+
+function openChat(orderId: string) {
+  chatOrderId.value = orderId
+  chatVisible.value = true
+}
 
 const status = ref<number | undefined>(undefined)
 const orders = ref<OrderVO[]>([])

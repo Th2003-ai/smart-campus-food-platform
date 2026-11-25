@@ -89,6 +89,7 @@ export const useUserStore = defineStore('user', {
       localStorage.setItem('CAMPUS_PORTAL', this.portal)
       localStorage.setItem('CAMPUS_HOME', this.homePath)
       localStorage.setItem(PERMS_KEY, JSON.stringify(this.perms))
+      localStorage.setItem('CAMPUS_USER_ID', this.userId)
       return result
     },
 
@@ -113,6 +114,7 @@ export const useUserStore = defineStore('user', {
       localStorage.removeItem('CAMPUS_PORTAL')
       localStorage.removeItem('CAMPUS_HOME')
       localStorage.removeItem(PERMS_KEY)
+      localStorage.removeItem('CAMPUS_USER_ID')
     }
   }
 })
