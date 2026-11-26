@@ -49,6 +49,15 @@
             >
               处理工单
             </el-button>
+            <el-button
+              v-if="t.orderId"
+              size="small"
+              type="warning"
+              plain
+              @click="openChat(t.orderId)"
+            >
+              进入会话
+            </el-button>
             <span v-else class="text-muted">已关闭</span>
           </div>
         </div>
@@ -84,6 +93,16 @@
         <el-button type="primary" :loading="submitting" @click="onSubmit">提交</el-button>
       </template>
     </el-dialog>
+
+    <!-- 客服会话：以管理员身份进线，学生/商户/骑手都在同一会话里 -->
+    <OrderChat
+      v-model="chatVisible"
+      :order-id="chatOrderId"
+      :thread="chatThread"
+      :allow-service="false"
+      title="客服会话"
+      hint="以平台客服身份回复，订单三方都能看到"
+    />
   </div>
 </template>
 
@@ -92,6 +111,19 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { handleTicket, listTickets, type Ticket } from '@/api/admin'
+import { serviceThread } from '@/api/chat'
+import OrderChat from '@/components/OrderChat.vue'
+
+const chatVisible = ref(false)
+const chatOrderId = ref('')
+const chatThread = ref('')
+
+function openChat(orderId?: string) {
+  if (!orderId) return
+  chatOrderId.value = orderId
+  chatThread.value = serviceThread(orderId)
+  chatVisible.value = true
+}
 
 const loading = ref(false)
 const tickets = ref<Ticket[]>([])

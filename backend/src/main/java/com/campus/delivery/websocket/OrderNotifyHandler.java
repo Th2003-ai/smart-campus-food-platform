@@ -114,6 +114,10 @@ public class OrderNotifyHandler extends TextWebSocketHandler {
             String content = node.path("content").asText("");
             ChatMessage saved = chatService.send(orderId, userId, role, content);
             chatService.participantList(orderId).forEach(pid -> sendToUser(pid, "CHAT", saved));
+            if (ChatService.isServiceThread(orderId)) {
+                // 客服线程里管理员不是「订单参与人」，单独广播给在线管理员，客服台才能实时看到
+                broadcastToRole(ChatService.ROLE_ADMIN, "CHAT", saved);
+            }
         } catch (BusinessException e) {
             sendText(session, buildPayload("CHAT_ERROR", Map.of("message", e.getMessage())));
         } catch (Exception e) {

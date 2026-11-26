@@ -107,7 +107,17 @@
             >
               确认交付（自取）
             </el-button>
-            <el-button size="small" text @click="openChat(vo.order.id)">聊天</el-button>
+            <el-button size="small" text @click="openChat(vo.order.id, 'STUDENT')">
+              联系顾客
+            </el-button>
+            <el-button
+              size="small"
+              text
+              :disabled="!vo.order.riderId"
+              @click="openChat(vo.order.id, 'RIDER')"
+            >
+              联系骑手
+            </el-button>
             <span
               v-if="vo.order.orderStatus === 2 && vo.order.deliveryType !== 2"
               class="text-muted"
@@ -135,8 +145,13 @@
       />
     </el-card>
 
-    <!-- 订单实时聊天（商户 ↔ 学生 ↔ 骑手） -->
-    <OrderChat v-model="chatVisible" :order-id="chatOrderId" title="订单沟通" />
+    <!-- 订单聊天：联系顾客 / 联系骑手（单聊）+ 可申请平台客服介入 -->
+    <OrderChat
+      v-model="chatVisible"
+      :order-id="chatOrderId"
+      :thread="chatThread"
+      :title="chatTitle"
+    />
   </div>
 </template>
 
@@ -145,12 +160,17 @@ import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
 import OrderChat from '@/components/OrderChat.vue'
+import { dmThread } from '@/api/chat'
 
 const chatVisible = ref(false)
 const chatOrderId = ref('')
+const chatThread = ref('')
+const chatTitle = ref('订单沟通')
 
-function openChat(orderId: string) {
+function openChat(orderId: string, peerRole: 'STUDENT' | 'RIDER') {
   chatOrderId.value = orderId
+  chatThread.value = dmThread(orderId, 'MERCHANT', peerRole)
+  chatTitle.value = peerRole === 'STUDENT' ? '联系顾客' : '联系骑手'
   chatVisible.value = true
 }
 

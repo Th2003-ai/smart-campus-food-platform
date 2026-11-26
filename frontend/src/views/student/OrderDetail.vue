@@ -92,6 +92,18 @@
           确认取餐
         </el-button>
         <el-button
+          v-if="vo"
+          @click="openChat('MERCHANT')"
+        >
+          联系商家
+        </el-button>
+        <el-button
+          v-if="vo && vo.order.riderId"
+          @click="openChat('RIDER')"
+        >
+          联系骑手
+        </el-button>
+        <el-button
           v-if="canReviewOrder(vo.order.orderStatus)"
           type="primary"
           @click="router.push('/student/orders')"
@@ -99,6 +111,14 @@
           去评价
         </el-button>
       </div>
+
+      <OrderChat
+        v-if="vo"
+        v-model="chatVisible"
+        :order-id="vo.order.id"
+        :thread="chatThread"
+        :title="chatTitle"
+      />
     </el-card>
 
     <el-empty v-else-if="!loading" description="订单不存在或无权查看" />
@@ -123,6 +143,18 @@ import {
   payStatusText
 } from '@/utils/dict'
 import { dishCover } from '@/utils/image'
+import { dmThread } from '@/api/chat'
+import OrderChat from '@/components/OrderChat.vue'
+
+const chatVisible = ref(false)
+const chatThread = ref('')
+const chatTitle = ref('订单沟通')
+
+function openChat(peerRole: 'MERCHANT' | 'RIDER') {
+  chatThread.value = dmThread(orderId, 'STUDENT', peerRole)
+  chatTitle.value = peerRole === 'MERCHANT' ? '联系商家' : '联系骑手'
+  chatVisible.value = true
+}
 
 const route = useRoute()
 const router = useRouter()

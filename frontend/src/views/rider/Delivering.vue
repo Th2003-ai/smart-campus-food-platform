@@ -57,14 +57,24 @@
             >
               确认送达
             </el-button>
-            <el-button size="small" text @click="openChat(o.id)">聊天</el-button>
+            <el-button size="small" text @click="openChat(o.id, 'STUDENT')">
+              联系顾客
+            </el-button>
+            <el-button size="small" text @click="openChat(o.id, 'MERCHANT')">
+              联系商家
+            </el-button>
           </div>
         </div>
       </div>
     </el-card>
 
-    <!-- 订单实时聊天（骑手 ↔ 学生 ↔ 商户） -->
-    <OrderChat v-model="chatVisible" :order-id="chatOrderId" title="订单沟通" />
+    <!-- 订单聊天：联系顾客 / 联系商家（单聊）+ 可申请平台客服介入 -->
+    <OrderChat
+      v-model="chatVisible"
+      :order-id="chatOrderId"
+      :thread="chatThread"
+      :title="chatTitle"
+    />
   </div>
 </template>
 
@@ -76,12 +86,17 @@ import type { Order } from '@/api/order'
 import { deliverOrder, listRiderOrders, pickupOrder } from '@/api/rider'
 import { money } from '@/utils/dict'
 import OrderChat from '@/components/OrderChat.vue'
+import { dmThread } from '@/api/chat'
 
 const chatVisible = ref(false)
 const chatOrderId = ref('')
+const chatThread = ref('')
+const chatTitle = ref('订单沟通')
 
-function openChat(orderId: string) {
+function openChat(orderId: string, peerRole: 'STUDENT' | 'MERCHANT') {
   chatOrderId.value = orderId
+  chatThread.value = dmThread(orderId, 'RIDER', peerRole)
+  chatTitle.value = peerRole === 'STUDENT' ? '联系顾客' : '联系商家'
   chatVisible.value = true
 }
 

@@ -65,7 +65,17 @@
               >
                 评价
               </el-button>
-              <el-button size="small" text @click="openChat(vo.order.id)">聊天</el-button>
+              <el-button size="small" text @click="openChat(vo.order.id, 'MERCHANT')">
+                联系商家
+              </el-button>
+              <el-button
+                size="small"
+                text
+                :disabled="!vo.order.riderId"
+                @click="openChat(vo.order.id, 'RIDER')"
+              >
+                联系骑手
+              </el-button>
               <el-button size="small" text type="primary" @click="router.push(`/student/orders/${vo.order.id}`)">
                 详情
               </el-button>
@@ -129,8 +139,13 @@
       </template>
     </el-dialog>
 
-    <!-- 订单实时聊天（学生 ↔ 商户 ↔ 骑手） -->
-    <OrderChat v-model="chatVisible" :order-id="chatOrderId" title="订单沟通" />
+    <!-- 订单聊天：联系商家 / 联系骑手（单聊）+ 可申请平台客服介入 -->
+    <OrderChat
+      v-model="chatVisible"
+      :order-id="chatOrderId"
+      :thread="chatThread"
+      :title="chatTitle"
+    />
   </div>
 </template>
 
@@ -142,6 +157,7 @@ import type { UploadUserFile } from 'element-plus'
 
 import { cancelOrder, listMyOrders, type OrderVO } from '@/api/order'
 import { submitReview } from '@/api/review'
+import { dmThread } from '@/api/chat'
 import { batchUpload } from '@/api/file'
 import {
   canCancelOrder,
@@ -158,9 +174,13 @@ const router = useRouter()
 
 const chatVisible = ref(false)
 const chatOrderId = ref('')
+const chatThread = ref('')
+const chatTitle = ref('订单沟通')
 
-function openChat(orderId: string) {
+function openChat(orderId: string, peerRole: 'MERCHANT' | 'RIDER') {
   chatOrderId.value = orderId
+  chatThread.value = dmThread(orderId, 'STUDENT', peerRole)
+  chatTitle.value = peerRole === 'MERCHANT' ? '联系商家' : '联系骑手'
   chatVisible.value = true
 }
 
