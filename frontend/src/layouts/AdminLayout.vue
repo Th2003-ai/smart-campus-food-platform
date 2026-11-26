@@ -12,7 +12,7 @@
         <el-menu-item index="/admin/config">系统配置</el-menu-item>
         <el-menu-item index="/admin/menu">菜单权限树</el-menu-item>
         <el-menu-item index="/admin/roles">角色管理</el-menu-item>
-        <el-menu-item index="/admin/permissions">角色权限</el-menu-item>
+        <el-menu-item index="/admin/permissions">角色权限</el-menu-item>\n        <el-menu-item index="/admin/groups">用户组权限</el-menu-item>
       </el-menu>
     </el-aside>
 

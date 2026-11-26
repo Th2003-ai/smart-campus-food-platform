@@ -1,7 +1,7 @@
 package com.campus.delivery.security;
 
 import com.campus.delivery.common.api.ResultCode;
-import com.campus.delivery.modules.admin.service.PermissionService;
+import com.campus.delivery.modules.admin.service.GroupPermissionService;
 import com.campus.delivery.common.exception.BusinessException;
 import com.campus.delivery.modules.user.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,7 +38,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtUtils jwtUtils;
     private final AuthService authService;
-    private final PermissionService permissionService;
+    private final GroupPermissionService groupPermissionService;
 
     @Value("${campus.jwt.header:Authorization}")
     private String tokenHeader;
@@ -81,31 +81,29 @@ public class AuthInterceptor implements HandlerInterceptor {
             UserContext.set(loginUser);
         }
 
-        // 接口级权限校验（@RequiresPerm）：角色授权矩阵决定能不能做这个动作
-        checkPermission(handlerMethod, loginUser, request);
-
+        // 先按「端」校验角色（@RequiresRole），再按「模块-方法」校验用户组权限
         RequiresRole requiresRole = resolveRequiresRole(handlerMethod);
-        if (requiresRole == null) {
-            // 未标注注解：只要求登录
+        if (requiresRole != null) {
             if (loginUser == null) {
                 throw new BusinessException(ResultCode.UNAUTHORIZED);
             }
-            return true;
-        }
-
-        if (loginUser == null) {
+            // 以「端」为准：新角色挂靠到某个端后即可通过该端的角色校验
+            String portal = loginUser.getPortal();
+            String currentPortal = (portal != null && !portal.isBlank()) ? portal : loginUser.getRole();
+            boolean allowed = Arrays.stream(requiresRole.value())
+                    .anyMatch(code -> code.equalsIgnoreCase(currentPortal));
+            if (!allowed) {
+                log.warn("越权访问被拒绝: uri={}, role={}, need={}",
+                        request.getRequestURI(), loginUser.getRole(), Arrays.toString(requiresRole.value()));
+                throw new BusinessException(ResultCode.FORBIDDEN);
+            }
+        } else if (loginUser == null) {
+            // 未标注注解：只要求登录
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
-        // 以「端」为准：新角色挂靠到某个端后即可通过该端的角色校验
-        String portal = loginUser.getPortal();
-        String currentPortal = (portal != null && !portal.isBlank()) ? portal : loginUser.getRole();
-        boolean allowed = Arrays.stream(requiresRole.value())
-                .anyMatch(code -> code.equalsIgnoreCase(currentPortal));
-        if (!allowed) {
-            log.warn("越权访问被拒绝: uri={}, role={}, need={}",
-                    request.getRequestURI(), loginUser.getRole(), Arrays.toString(requiresRole.value()));
-            throw new BusinessException(ResultCode.FORBIDDEN);
-        }
+
+        // 用户组权限（禅道模式）：模块.方法，默认拒绝，ADMIN 绕过
+        checkEndpointPriv(handlerMethod, loginUser, request);
         return true;
     }
 
@@ -141,36 +139,31 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * 接口级权限校验：{@link RequiresPerm} 声明了权限码时，要求当前角色在
-     * {@code sys_role_permission} 中被授予其中任意一个（ADMIN 的 admin:all 通配）。
+     * 用户组权限校验（禅道模式）。
      *
-     * <p>为什么放在角色校验之前：权限码比角色更细。超管在管理端把某个角色的
-     * {@code dish:write} 关掉，商户下一次请求就该被挡住，而不需要重启服务
-     * （权限集合缓存在 Redis，管理端保存时会主动失效）。
+     * <p>权限项 = {@code 模块.方法}：模块取控制器类名去掉 Controller 后缀（小写），
+     * 方法取 handler 的 Java 方法名。用户可属多个组，权限取并集；
+     * <b>默认拒绝</b>——组里没勾这个接口就 403，ADMIN 直接绕过。
      *
-     * <p>没有注解的接口不受影响，仍然只要求登录。
+     * <p>权限集合缓存在 Redis（{@code auth:gpriv:{userId}}，30 分钟），
+     * 管理端保存时主动失效，所以关掉一个接口下一个请求就生效，不用重启。
+     *
+     * <p>原来的 {@code @RequiresPerm} 权限码不再参与判定，只作为文档标注保留。
      */
-    private void checkPermission(HandlerMethod handlerMethod, LoginUser loginUser,
-                                 HttpServletRequest request) {
-        RequiresPerm requiresPerm = resolveRequiresPerm(handlerMethod);
-        if (requiresPerm == null) {
-            return;
-        }
+    private void checkEndpointPriv(HandlerMethod handlerMethod, LoginUser loginUser,
+                                   HttpServletRequest request) {
         if (loginUser == null) {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
-        if (!permissionService.hasPerm(loginUser.getRole(), requiresPerm.value())) {
-            log.warn("权限不足被拒绝: uri={}, role={}, need={}",
-                    request.getRequestURI(), loginUser.getRole(), Arrays.toString(requiresPerm.value()));
+        if (groupPermissionService.isAdmin(loginUser.getRole())) {
+            return;
+        }
+        String module = EndpointRegistry.moduleOf(handlerMethod);
+        String method = handlerMethod.getMethod().getName();
+        if (!groupPermissionService.hasPriv(loginUser.getUserId(), loginUser.getRole(), module, method)) {
+            log.warn("用户组权限不足: uri={}, role={}, need={}.{}",
+                    request.getRequestURI(), loginUser.getRole(), module, method);
             throw new BusinessException(ResultCode.FORBIDDEN);
         }
-    }
-
-    private RequiresPerm resolveRequiresPerm(HandlerMethod handlerMethod) {
-        RequiresPerm annotation = handlerMethod.getMethodAnnotation(RequiresPerm.class);
-        if (annotation != null) {
-            return annotation;
-        }
-        return handlerMethod.getBeanType().getAnnotation(RequiresPerm.class);
     }
 }

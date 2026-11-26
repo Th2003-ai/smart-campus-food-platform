@@ -254,6 +254,12 @@ const routes: RouteRecordRaw[] = [
         name: 'AdminPermissions',
         component: () => import('@/views/admin/Permissions.vue'),
         meta: { title: '角色权限' }
+      },
+      {
+        path: 'groups',
+        name: 'AdminGroups',
+        component: () => import('@/views/admin/Groups.vue'),
+        meta: { title: '用户组权限' }
       }
     ]
   },
